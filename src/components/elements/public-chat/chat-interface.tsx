@@ -124,29 +124,44 @@ export default function ChatInterface(): ReactElement {
     }
   }, [paginatedMessages, setMessages, isLoading, isFetchingNextPage])
 
-  // Smooth scroll to bottom function
-  const scrollToBottom = useCallback((smooth = true, offset = 50) => {
-    if (parentRef.current) {
-      const scrollElement = parentRef.current
-      const targetScrollTop = scrollElement.scrollHeight - scrollElement.clientHeight - offset
-
-      scrollElement.scrollTo({
-        top: Math.max(0, targetScrollTop),
-        behavior: smooth ? "smooth" : "auto",
-      })
-
-      // Reset user scrolled up state when scrolling to bottom
-      setUserScrolledUp(false)
+  // Detect if we're on mobile
+  const isMobile = useMemo(() => {
+    if (typeof window !== "undefined") {
+      return window.innerWidth < 640 // sm breakpoint
     }
+    return false
   }, [])
 
-  // Check if user is near bottom of chat
+  // Smooth scroll to bottom function with mobile-specific offset
+  const scrollToBottom = useCallback(
+    (smooth = true, customOffset?: number) => {
+      if (parentRef.current) {
+        const scrollElement = parentRef.current
+        // Use different offsets for mobile vs desktop
+        const defaultOffset = isMobile ? 80 : 50 // More space on mobile
+        const offset = customOffset !== undefined ? customOffset : defaultOffset
+        const targetScrollTop = scrollElement.scrollHeight - scrollElement.clientHeight - offset
+
+        scrollElement.scrollTo({
+          top: Math.max(0, targetScrollTop),
+          behavior: smooth ? "smooth" : "auto",
+        })
+
+        // Reset user scrolled up state when scrolling to bottom
+        setUserScrolledUp(false)
+      }
+    },
+    [isMobile],
+  )
+
+  // Check if user is near bottom of chat - more generous for mobile
   const isNearBottom = useCallback(() => {
     if (!parentRef.current) return false
     const { scrollTop, scrollHeight, clientHeight } = parentRef.current
-    // More generous threshold - consider "near bottom" if within 300px
-    return scrollTop + clientHeight >= scrollHeight - 300
-  }, [])
+    // More generous threshold for mobile - consider "near bottom" if within 400px on mobile, 300px on desktop
+    const threshold = isMobile ? 400 : 300
+    return scrollTop + clientHeight >= scrollHeight - threshold
+  }, [isMobile])
 
   // Auto-scroll to bottom on initial load
   useEffect(() => {
@@ -180,31 +195,43 @@ export default function ChatInterface(): ReactElement {
               if (parentRef.current) {
                 const isUserMessage = newMessage.userId === user?.userId
                 const nearBottom = isNearBottom()
+                const { scrollTop, scrollHeight, clientHeight } = parentRef.current
 
                 console.log("Auto-scroll check:", {
                   isUserMessage,
                   nearBottom,
                   userScrolledUp,
-                  scrollTop: parentRef.current.scrollTop,
-                  scrollHeight: parentRef.current.scrollHeight,
-                  clientHeight: parentRef.current.clientHeight,
+                  scrollTop,
+                  scrollHeight,
+                  clientHeight,
+                  isMobile,
+                  distanceFromBottom: scrollHeight - (scrollTop + clientHeight),
                 })
 
-                // Auto-scroll conditions:
+                // More aggressive auto-scroll conditions:
                 // 1. Always scroll for user's own messages
-                // 2. Scroll for others' messages if user is near bottom OR hasn't deliberately scrolled up
-                if (isUserMessage || nearBottom || !userScrolledUp) {
-                  console.log("Auto-scrolling to new message")
-                  scrollToBottom(true, 30) // Show message with 30px padding from bottom
+                // 2. For others' messages: scroll if user is near bottom OR hasn't scrolled up significantly
+                // 3. On mobile, be even more aggressive with auto-scroll
+                const shouldAutoScroll =
+                  isUserMessage ||
+                  nearBottom ||
+                  !userScrolledUp ||
+                  (isMobile && scrollTop + clientHeight >= scrollHeight - 500) // Very generous on mobile
 
-                  // Multiple scroll attempts to ensure it works
-                  setTimeout(() => scrollToBottom(true, 30), 100)
-                  setTimeout(() => scrollToBottom(true, 30), 300)
+                if (shouldAutoScroll) {
+                  console.log("Auto-scrolling to new message")
+                  const mobileOffset = isMobile ? 60 : 30
+                  scrollToBottom(true, mobileOffset)
+
+                  // Multiple scroll attempts with different timings
+                  setTimeout(() => scrollToBottom(true, mobileOffset), 100)
+                  setTimeout(() => scrollToBottom(true, mobileOffset), 250)
+                  setTimeout(() => scrollToBottom(true, mobileOffset), 500)
                 } else {
-                  console.log("Not auto-scrolling - user has scrolled up")
+                  console.log("Not auto-scrolling - user has scrolled up significantly")
                 }
               }
-            }, 100)
+            }, 50) // Reduced initial delay
             break
 
           case "public_reaction":
@@ -232,18 +259,20 @@ export default function ChatInterface(): ReactElement {
         socket.onmessage = null
       }
     }
-  }, [socket, addMessage, setReactionUpdate, scrollToBottom, user?.userId, isNearBottom, userScrolledUp])
+  }, [socket, addMessage, setReactionUpdate, scrollToBottom, user?.userId, isNearBottom, userScrolledUp, isMobile])
 
   // Handle scroll events for infinite scroll and scroll-to-bottom button
   const handleScroll = useCallback(() => {
     if (!parentRef.current) return
 
     const { scrollTop, scrollHeight, clientHeight } = parentRef.current
-    const nearBottom = scrollTop + clientHeight >= scrollHeight - 300
+    const nearBottom = scrollTop + clientHeight >= scrollHeight - (isMobile ? 400 : 300)
     const isNearTop = scrollTop <= 100
 
-    // Track if user has deliberately scrolled up (more than 400px from bottom)
-    const hasScrolledUp = scrollTop + clientHeight < scrollHeight - 400
+    // Track if user has deliberately scrolled up - more generous thresholds
+    // On mobile, only consider it "scrolled up" if they're really far from bottom
+    const scrollUpThreshold = isMobile ? 600 : 500
+    const hasScrolledUp = scrollTop + clientHeight < scrollHeight - scrollUpThreshold
     setUserScrolledUp(hasScrolledUp)
 
     // Show/hide scroll to bottom button
@@ -266,14 +295,14 @@ export default function ChatInterface(): ReactElement {
         }, 100)
       })
     }
-  }, [messages.length, hasNextPage, isFetchingNextPage, isLoading, fetchNextPage])
+  }, [messages.length, hasNextPage, isFetchingNextPage, isLoading, fetchNextPage, isMobile])
 
   // Throttled scroll handler for better performance
   const throttledHandleScroll = useMemo(() => {
     let timeoutId: NodeJS.Timeout
     return () => {
       clearTimeout(timeoutId)
-      timeoutId = setTimeout(handleScroll, 150)
+      timeoutId = setTimeout(handleScroll, 100) // Reduced throttle time for better responsiveness
     }
   }, [handleScroll])
 
@@ -326,8 +355,9 @@ export default function ChatInterface(): ReactElement {
   }, [])
 
   const handleScrollToBottom = useCallback(() => {
-    scrollToBottom(true, 20) // Show with 20px padding from bottom
-  }, [scrollToBottom])
+    const mobileOffset = isMobile ? 40 : 20
+    scrollToBottom(true, mobileOffset)
+  }, [scrollToBottom, isMobile])
 
   console.log("Chat Interface Debug:", {
     messagesLength: messages.length,
@@ -337,6 +367,7 @@ export default function ChatInterface(): ReactElement {
     isFetchingNextPage,
     user: user?.userName,
     userScrolledUp,
+    isMobile,
   })
 
   return (
@@ -359,7 +390,7 @@ export default function ChatInterface(): ReactElement {
           {/* Messages Container */}
           <div className="min-h-full">
             {messages.length > 0 ? (
-              <div className="p-3 space-y-2">
+              <div className="p-3 space-y-2 pb-4 sm:pb-6">
                 {messages.map((message, index) => (
                   <div key={`${message.id}-${index}`} className="animate-in slide-in-from-bottom-2 duration-300">
                     {user && (
@@ -373,6 +404,8 @@ export default function ChatInterface(): ReactElement {
                     )}
                   </div>
                 ))}
+                {/* Extra padding at bottom for mobile */}
+                <div className="h-4 sm:h-2" />
               </div>
             ) : !isLoading ? (
               <EmptyState />
