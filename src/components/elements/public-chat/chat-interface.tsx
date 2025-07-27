@@ -1,17 +1,15 @@
 "use client"
 import type { ReactElement } from "react"
 import React from "react"
-
 import { useRef, useState, useEffect, useMemo, useCallback } from "react"
 import { Users, MessageCircle, ArrowDown, Loader2 } from "lucide-react"
 import { useWebSocketConnectionStore } from "@/lib/store/use-web-socket-store"
 import toast from "react-hot-toast"
 import { useUserStore } from "@/lib/store/user-store"
-import type { EventType, MessageReplyType, ReactionSendPayloadType } from "@/lib/utils/types/chat/types"
+import type { EventType, MessageReplyType, ReactionSendPayloadType, NewPayloadType } from "@/lib/utils/types/chat/types"
 import ChatMessage from "./chat-message"
 import MessageInput from "./message-input"
 import { useGetPublicMessage } from "@/lib/hooks/tanstack-query/query-hook/messages/use-get-message"
-import { useVirtualizer } from "@tanstack/react-virtual"
 import { useChatStore } from "@/lib/store/use-chat-store"
 
 // Memoized Chat Header Component
@@ -64,10 +62,10 @@ const ChatHeader = React.memo(function ChatHeader({
 // Memoized Loading Indicator Component
 const LoadingIndicator = React.memo(function LoadingIndicator(): ReactElement {
   return (
-    <div className="flex items-center justify-center p-4 bg-purple-50 border-b border-purple-200">
+    <div className="flex items-center justify-center p-4 bg-gradient-to-r from-purple-100 to-pink-100 border-b border-purple-200">
       <div className="flex items-center gap-2 text-purple-600">
         <Loader2 className="w-4 h-4 animate-spin" />
-        <span className="text-sm">Loading older messages...</span>
+        <span className="text-sm font-medium">Loading older messages...</span>
       </div>
     </div>
   )
@@ -94,100 +92,198 @@ const EmptyState = React.memo(function EmptyState(): ReactElement {
 })
 
 export default function ChatInterface(): ReactElement {
-  const { messages, setMessages } = useChatStore()
+  const { messages, setMessages, addMessage, setReactionUpdate } = useChatStore()
   const { user } = useUserStore()
   const { data, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = useGetPublicMessage()
   const [replyingTo, setReplyingTo] = useState<MessageReplyType | null>(null)
   const [showScrollToBottom, setShowScrollToBottom] = useState(false)
   const [isInitialLoad, setIsInitialLoad] = useState(true)
+  const [userScrolledUp, setUserScrolledUp] = useState(false) // Track if user deliberately scrolled up
   const parentRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const { isConnected, send } = useWebSocketConnectionStore()
+  const { isConnected, send, socket } = useWebSocketConnectionStore()
 
-  const paginatedMessages = useMemo(() => (data ? data.pages.flatMap((page) => page.rows) : []), [data])
+  // Get paginated messages and sort them properly for chat display
+  const paginatedMessages = useMemo(() => {
+    if (!data) return []
+    const allMessages = data.pages.flatMap((page) => page.rows)
+    // Sort by creation date (oldest first, newest last for chat display)
+    return allMessages.sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime())
+  }, [data])
 
   // Memoize unique user count
   const uniqueUserCount = useMemo(() => {
     return new Set(messages.map((m) => m.userId)).size
   }, [messages])
 
-  // Create virtualizer with proper chat behavior
-  const rowVirtualizer = useVirtualizer({
-    count: hasNextPage ? messages.length + 1 : messages.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => 120,
-    overscan: 10,
-  })
-
   // Set messages from paginated data
   useEffect(() => {
     if (isLoading && !isFetchingNextPage) return
-    if (data) {
+    if (paginatedMessages.length > 0) {
       setMessages(paginatedMessages)
     }
-  }, [isLoading, isFetchingNextPage, setMessages, data, paginatedMessages])
+  }, [paginatedMessages, setMessages, isLoading, isFetchingNextPage])
 
-  // Auto-scroll to bottom on initial load and new messages
+  // Smooth scroll to bottom function
+  const scrollToBottom = useCallback((smooth = true, offset = 50) => {
+    if (parentRef.current) {
+      const scrollElement = parentRef.current
+      const targetScrollTop = scrollElement.scrollHeight - scrollElement.clientHeight - offset
+
+      scrollElement.scrollTo({
+        top: Math.max(0, targetScrollTop),
+        behavior: smooth ? "smooth" : "auto",
+      })
+
+      // Reset user scrolled up state when scrolling to bottom
+      setUserScrolledUp(false)
+    }
+  }, [])
+
+  // Check if user is near bottom of chat
+  const isNearBottom = useCallback(() => {
+    if (!parentRef.current) return false
+    const { scrollTop, scrollHeight, clientHeight } = parentRef.current
+    // More generous threshold - consider "near bottom" if within 300px
+    return scrollTop + clientHeight >= scrollHeight - 300
+  }, [])
+
+  // Auto-scroll to bottom on initial load
   useEffect(() => {
-    if (isInitialLoad && messages.length > 0) {
+    if (isInitialLoad && messages.length > 0 && !isLoading) {
       setIsInitialLoad(false)
       setTimeout(() => {
-        scrollToBottom()
+        if (parentRef.current) {
+          parentRef.current.scrollTop = parentRef.current.scrollHeight
+        }
       }, 100)
     }
-  }, [messages.length, isInitialLoad])
+  }, [messages.length, isInitialLoad, isLoading])
 
-  // Infinite scroll - fetch when scrolling to TOP (for older messages)
+  // Handle WebSocket messages for real-time updates
   useEffect(() => {
-    const [firstItem] = rowVirtualizer.getVirtualItems()
-    if (!firstItem) return
+    if (!socket) return
 
-    // Check if we're near the top and should fetch more messages
-    if (firstItem.index <= 1 && hasNextPage && !isFetchingNextPage) {
-      const scrollElement = parentRef.current
-      if (scrollElement) {
-        const previousScrollHeight = scrollElement.scrollHeight
-        const previousScrollTop = scrollElement.scrollTop
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const newEvent = JSON.parse(event.data)
+        console.log("WebSocket event received:", newEvent.type, newEvent.payload)
 
-        fetchNextPage().then(() => {
-          // Maintain scroll position after new messages are loaded
-          setTimeout(() => {
-            if (scrollElement) {
-              const newScrollHeight = scrollElement.scrollHeight
-              const heightDifference = newScrollHeight - previousScrollHeight
-              scrollElement.scrollTop = previousScrollTop + heightDifference
-            }
-          }, 50)
-        })
+        switch (newEvent.type) {
+          case "public_new_message":
+            const newMessage = newEvent.payload as NewPayloadType
+            addMessage(newMessage)
+            console.log("New message added:", newMessage)
+
+            // Enhanced auto-scroll logic for new messages
+            setTimeout(() => {
+              if (parentRef.current) {
+                const isUserMessage = newMessage.userId === user?.userId
+                const nearBottom = isNearBottom()
+
+                console.log("Auto-scroll check:", {
+                  isUserMessage,
+                  nearBottom,
+                  userScrolledUp,
+                  scrollTop: parentRef.current.scrollTop,
+                  scrollHeight: parentRef.current.scrollHeight,
+                  clientHeight: parentRef.current.clientHeight,
+                })
+
+                // Auto-scroll conditions:
+                // 1. Always scroll for user's own messages
+                // 2. Scroll for others' messages if user is near bottom OR hasn't deliberately scrolled up
+                if (isUserMessage || nearBottom || !userScrolledUp) {
+                  console.log("Auto-scrolling to new message")
+                  scrollToBottom(true, 30) // Show message with 30px padding from bottom
+
+                  // Multiple scroll attempts to ensure it works
+                  setTimeout(() => scrollToBottom(true, 30), 100)
+                  setTimeout(() => scrollToBottom(true, 30), 300)
+                } else {
+                  console.log("Not auto-scrolling - user has scrolled up")
+                }
+              }
+            }, 100)
+            break
+
+          case "public_reaction":
+            const reactionPayload = newEvent.payload as ReactionSendPayloadType
+            console.log("Reaction received:", reactionPayload)
+            setReactionUpdate(reactionPayload)
+            toast.success(`Reaction: ${reactionPayload.emoji}`, {
+              icon: reactionPayload.emoji,
+              duration: 1500,
+            })
+            break
+
+          default:
+            console.log("Unknown WebSocket event type:", newEvent.type)
+            break
+        }
+      } catch (error) {
+        console.error("Error parsing WebSocket message:", error)
       }
     }
-  }, [rowVirtualizer.getVirtualItems(), hasNextPage, isFetchingNextPage, fetchNextPage])
 
-  // Check scroll position for scroll-to-bottom button
-  const handleScroll = useCallback(() => {
-    if (parentRef.current) {
-      const { scrollTop, scrollHeight, clientHeight } = parentRef.current
-      const isNearBottom = scrollTop + clientHeight >= scrollHeight - 200
-      setShowScrollToBottom(!isNearBottom && messages.length > 0)
+    socket.onmessage = handleMessage
+    return () => {
+      if (socket.onmessage === handleMessage) {
+        socket.onmessage = null
+      }
     }
-  }, [messages.length])
+  }, [socket, addMessage, setReactionUpdate, scrollToBottom, user?.userId, isNearBottom, userScrolledUp])
+
+  // Handle scroll events for infinite scroll and scroll-to-bottom button
+  const handleScroll = useCallback(() => {
+    if (!parentRef.current) return
+
+    const { scrollTop, scrollHeight, clientHeight } = parentRef.current
+    const nearBottom = scrollTop + clientHeight >= scrollHeight - 300
+    const isNearTop = scrollTop <= 100
+
+    // Track if user has deliberately scrolled up (more than 400px from bottom)
+    const hasScrolledUp = scrollTop + clientHeight < scrollHeight - 400
+    setUserScrolledUp(hasScrolledUp)
+
+    // Show/hide scroll to bottom button
+    setShowScrollToBottom(!nearBottom && messages.length > 0)
+
+    // Infinite scroll: fetch older messages when near top
+    if (isNearTop && hasNextPage && !isFetchingNextPage && !isLoading) {
+      console.log("Fetching next page...")
+      const previousScrollHeight = scrollHeight
+      const previousScrollTop = scrollTop
+
+      fetchNextPage().then(() => {
+        // Maintain scroll position after loading older messages
+        setTimeout(() => {
+          if (parentRef.current) {
+            const newScrollHeight = parentRef.current.scrollHeight
+            const heightDifference = newScrollHeight - previousScrollHeight
+            parentRef.current.scrollTop = previousScrollTop + heightDifference
+          }
+        }, 100)
+      })
+    }
+  }, [messages.length, hasNextPage, isFetchingNextPage, isLoading, fetchNextPage])
+
+  // Throttled scroll handler for better performance
+  const throttledHandleScroll = useMemo(() => {
+    let timeoutId: NodeJS.Timeout
+    return () => {
+      clearTimeout(timeoutId)
+      timeoutId = setTimeout(handleScroll, 150)
+    }
+  }, [handleScroll])
 
   useEffect(() => {
     const scrollElement = parentRef.current
     if (scrollElement) {
-      scrollElement.addEventListener("scroll", handleScroll)
-      return () => scrollElement.removeEventListener("scroll", handleScroll)
+      scrollElement.addEventListener("scroll", throttledHandleScroll, { passive: true })
+      return () => scrollElement.removeEventListener("scroll", throttledHandleScroll)
     }
-  }, [handleScroll])
-
-  const scrollToBottom = useCallback(() => {
-    if (parentRef.current) {
-      parentRef.current.scrollTo({
-        top: parentRef.current.scrollHeight,
-        behavior: "smooth",
-      })
-    }
-  }, [])
+  }, [throttledHandleScroll])
 
   const handleReply = useCallback((messageToReply: MessageReplyType) => {
     setReplyingTo(messageToReply)
@@ -214,10 +310,13 @@ export default function ChatInterface(): ReactElement {
         payload: reactionPayload,
       }
       send(JSON.stringify(eventData))
-      toast.success(`Reacted with ${emoji}!`, {
-        icon: emoji,
-        duration: 1500,
-      })
+
+      if (emoji) {
+        toast.success(`Reacted with ${emoji}!`, {
+          icon: emoji,
+          duration: 1500,
+        })
+      }
     },
     [user, send],
   )
@@ -226,100 +325,94 @@ export default function ChatInterface(): ReactElement {
     setReplyingTo(null)
   }, [])
 
-  // Auto-scroll to bottom when new message is sent
   const handleScrollToBottom = useCallback(() => {
-    setTimeout(() => {
-      scrollToBottom()
-    }, 100)
+    scrollToBottom(true, 20) // Show with 20px padding from bottom
   }, [scrollToBottom])
-console.log("this is pagination message  ;",paginatedMessages)
+
+  console.log("Chat Interface Debug:", {
+    messagesLength: messages.length,
+    paginatedMessagesLength: paginatedMessages.length,
+    isLoading,
+    hasNextPage,
+    isFetchingNextPage,
+    user: user?.userName,
+    userScrolledUp,
+  })
+
   return (
     <div className="flex flex-col h-[500px] sm:h-[650px] bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 rounded-2xl sm:rounded-3xl border-2 border-purple-200 shadow-2xl overflow-hidden">
       {/* Chat Header */}
       <ChatHeader isConnected={isConnected} messageCount={messages.length} uniqueUserCount={uniqueUserCount} />
 
       {/* Messages Area */}
-      <div className="flex-1 relative">
+      <div className="flex-1 relative bg-white overflow-hidden">
         <div
           ref={parentRef}
-          className="h-full overflow-auto"
+          className="h-full overflow-y-auto overscroll-behavior-y-contain"
           style={{
-            contain: "strict",
+            scrollBehavior: "smooth",
           }}
         >
           {/* Loading indicator at top when fetching older messages */}
           {isFetchingNextPage && <LoadingIndicator />}
 
-          {/* Messages */}
-          {messages.length > 0 ? (
-            <div
-              style={{
-                height: `${rowVirtualizer.getTotalSize()}px`,
-                position: "relative",
-              }}
-            >
-              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                const isLoaderRow = virtualRow.index > messages.length - 1
-                const message = messages[virtualRow.index]
-
-                return (
-                  <div
-                    key={virtualRow.index}
-                    style={{
-                      position: "absolute",
-                      top: 0,
-                      left: 0,
-                      width: "100%",
-                      height: `${virtualRow.size}px`,
-                      transform: `translateY(${virtualRow.start}px)`,
-                    }}
-                  >
-                    {isLoaderRow ? (
-                      <div className="flex items-center justify-center h-full p-4">
-                        <div className="text-sm text-gray-500">
-                          {hasNextPage ? "Scroll up for more messages..." : "You've reached the beginning! 🎉"}
-                        </div>
-                      </div>
-                    ) : message && user ? (
-                      <div className="px-3 py-2">
-                        <ChatMessage
-                          message={message}
-                          isCurrentUser={message.userId === user.userId}
-                          currentUserId={user.userId}
-                          onReply={handleReply}
-                          onReaction={handleReaction}
-                        />
-                      </div>
-                    ) : null}
+          {/* Messages Container */}
+          <div className="min-h-full">
+            {messages.length > 0 ? (
+              <div className="p-3 space-y-2">
+                {messages.map((message, index) => (
+                  <div key={`${message.id}-${index}`} className="animate-in slide-in-from-bottom-2 duration-300">
+                    {user && (
+                      <ChatMessage
+                        message={message}
+                        isCurrentUser={message.userId === user.userId}
+                        currentUserId={user.userId}
+                        onReply={handleReply}
+                        onReaction={handleReaction}
+                      />
+                    )}
                   </div>
-                )
-              })}
-            </div>
-          ) : (
-            <EmptyState />
-          )}
+                ))}
+              </div>
+            ) : !isLoading ? (
+              <EmptyState />
+            ) : null}
+          </div>
         </div>
 
         {/* Scroll to bottom button */}
         {showScrollToBottom && (
           <button
-            onClick={scrollToBottom}
-            className="absolute bottom-4 right-4 bg-purple-500 hover:bg-purple-600 text-white p-3 rounded-full shadow-lg transition-all duration-200 transform hover:scale-105 active:scale-95 z-10"
+            onClick={handleScrollToBottom}
+            className="absolute bottom-4 right-4 bg-purple-500 hover:bg-purple-600 text-white p-3 rounded-full shadow-lg transition-all duration-200 transform hover:scale-105 active:scale-95 z-10 animate-in slide-in-from-bottom-2"
           >
             <ArrowDown className="w-5 h-5" />
+            <span className="sr-only">Scroll to bottom</span>
           </button>
+        )}
+
+        {/* Loading overlay for initial load */}
+        {isLoading && !isFetchingNextPage && messages.length === 0 && (
+          <div className="absolute inset-0 bg-white/90 backdrop-blur-sm flex items-center justify-center z-20">
+            <div className="flex items-center gap-3 bg-white rounded-full px-6 py-3 shadow-lg">
+              <Loader2 className="w-5 h-5 animate-spin text-purple-500" />
+              <span className="text-sm font-medium text-gray-700">Loading messages...</span>
+            </div>
+          </div>
         )}
       </div>
 
-      {/* Message Input */}
-      <MessageInput
-        ref={inputRef}
-        user={user}
-        isConnected={isConnected}
-        replyingTo={replyingTo}
-        onCancelReply={cancelReply}
-        onScrollToBottom={handleScrollToBottom}
-      />
+      {/* Message Input - Always visible */}
+      <div className="flex-shrink-0">
+        <MessageInput
+          ref={inputRef}
+          user={user}
+          isConnected={isConnected}
+          replyingTo={replyingTo}
+          onCancelReply={cancelReply}
+          onScrollToBottom={handleScrollToBottom}
+        />
+      </div>
     </div>
   )
 }

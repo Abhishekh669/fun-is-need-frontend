@@ -17,14 +17,14 @@ const ReplyPreview = React.memo(function ReplyPreview({
   onCancel: () => void
 }) {
   return (
-    <div className="px-3 py-2 sm:px-6 sm:py-3 bg-purple-50 border-t border-purple-200">
+    <div className="px-3 py-2 sm:px-6 sm:py-3 bg-gradient-to-r from-purple-50 to-pink-50 border-t border-purple-200">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm min-w-0 flex-1">
           <Reply className="w-4 h-4 text-purple-500 flex-shrink-0" />
           <span className="text-purple-600 font-medium flex-shrink-0">Replying to {replyingTo.senderName}</span>
           <span className="text-gray-500 truncate">{replyingTo.message}</span>
         </div>
-        <Button variant="ghost" size="sm" onClick={onCancel} className="flex-shrink-0 ml-2">
+        <Button variant="ghost" size="sm" onClick={onCancel} className="flex-shrink-0 ml-2 hover:bg-purple-100">
           <X className="w-4 h-4" />
         </Button>
       </div>
@@ -39,7 +39,7 @@ const CharacterCounter = React.memo(function CharacterCounter({ messageLength }:
   return (
     <div className="mt-2 text-center">
       <span
-        className={`text-xs px-2 py-1 sm:px-3 sm:py-1 rounded-full ${
+        className={`text-xs px-2 py-1 sm:px-3 sm:py-1 rounded-full transition-colors ${
           messageLength > 450 ? "bg-red-100 text-red-600" : "bg-yellow-100 text-yellow-600"
         }`}
       >
@@ -108,13 +108,20 @@ const MessageInput = forwardRef<
         send(JSON.stringify(eventData))
         setMessage("")
         onCancelReply()
-        toast.success("Message sent to the fun zone! 🚀", {
+
+        toast.success("Message sent! 🚀", {
           icon: "🎉",
           style: { background: "#4ecdc4", color: "white" },
+          duration: 2000,
         })
 
-        // Auto scroll to bottom after sending message
-        onScrollToBottom()
+        // Improved auto scroll after sending message with multiple attempts
+        const scrollAfterSend = () => {
+          setTimeout(() => onScrollToBottom(), 100)
+          setTimeout(() => onScrollToBottom(), 300)
+          setTimeout(() => onScrollToBottom(), 600)
+        }
+        scrollAfterSend()
       } catch (error) {
         toast.error("Oops! Message got lost in space! 🛸", {
           icon: "😅",
@@ -160,7 +167,7 @@ const MessageInput = forwardRef<
               onChange={handleInputChange}
               onKeyPress={handleKeyPress}
               placeholder={replyingTo ? "Type your reply... ↩️" : "Type something awesome... ✨"}
-              className="pr-4 py-3 text-sm sm:text-base rounded-2xl border-2 border-purple-200 focus:border-purple-400 bg-white/80 backdrop-blur-sm shadow-lg"
+              className="pr-4 py-3 text-sm sm:text-base rounded-2xl border-2 border-purple-200 focus:border-purple-400 bg-white/90 backdrop-blur-sm shadow-lg transition-all duration-200 focus:shadow-xl"
               maxLength={500}
               disabled={!isConnected || !user || isSending}
             />
