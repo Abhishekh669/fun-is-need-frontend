@@ -1,0 +1,188 @@
+"use client"
+import React, { useState, useCallback, forwardRef } from "react"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import { Send, Reply, X } from "lucide-react"
+import { useWebSocketConnectionStore } from "@/lib/store/use-web-socket-store"
+import toast from "react-hot-toast"
+import type { UserType } from "@/lib/store/user-store"
+import type { EventType, MessageReplyType } from "@/lib/utils/types/chat/types"
+
+// Memoized Reply Preview Component
+const ReplyPreview = React.memo(function ReplyPreview({
+  replyingTo,
+  onCancel,
+}: {
+  replyingTo: MessageReplyType
+  onCancel: () => void
+}) {
+  return (
+    <div className="px-3 py-2 sm:px-6 sm:py-3 bg-purple-50 border-t border-purple-200">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-sm min-w-0 flex-1">
+          <Reply className="w-4 h-4 text-purple-500 flex-shrink-0" />
+          <span className="text-purple-600 font-medium flex-shrink-0">Replying to {replyingTo.senderName}</span>
+          <span className="text-gray-500 truncate">{replyingTo.message}</span>
+        </div>
+        <Button variant="ghost" size="sm" onClick={onCancel} className="flex-shrink-0 ml-2">
+          <X className="w-4 h-4" />
+        </Button>
+      </div>
+    </div>
+  )
+})
+
+// Memoized Character Counter Component
+const CharacterCounter = React.memo(function CharacterCounter({ messageLength }: { messageLength: number }) {
+  if (messageLength <= 400) return null
+
+  return (
+    <div className="mt-2 text-center">
+      <span
+        className={`text-xs px-2 py-1 sm:px-3 sm:py-1 rounded-full ${
+          messageLength > 450 ? "bg-red-100 text-red-600" : "bg-yellow-100 text-yellow-600"
+        }`}
+      >
+        {500 - messageLength} characters left!
+        {messageLength > 450 ? " 🔥" : " ✍️"}
+      </span>
+    </div>
+  )
+})
+
+const MessageInput = forwardRef<
+  HTMLInputElement,
+  {
+    user: UserType | undefined
+    isConnected: boolean
+    replyingTo: MessageReplyType | null
+    onCancelReply: () => void
+    onScrollToBottom: () => void
+  }
+>(function MessageInput({ user, isConnected, replyingTo, onCancelReply, onScrollToBottom }, ref) {
+  const [message, setMessage] = useState("")
+  const [isSending, setIsSending] = useState(false)
+  const { send } = useWebSocketConnectionStore()
+
+  // Focus input when replying
+  React.useEffect(() => {
+    if (replyingTo && ref && "current" in ref) {
+      setTimeout(() => {
+        ref.current?.focus()
+      }, 100)
+    }
+  }, [replyingTo, ref])
+
+  const handleSendMessage = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault()
+      if (!isConnected) {
+        toast.error("Oops! Not connected to the fun zone! 🚫", {
+          icon: "🔌",
+          style: { background: "#ff6b6b", color: "white" },
+        })
+        return
+      }
+      if (!user || message.trim().length === 0 || isSending) return
+
+      setIsSending(true)
+      try {
+        const payload = {
+          userId: user.userId,
+          userName: user.userName,
+          message: message.trim(),
+          replyTo: replyingTo
+            ? {
+                messageId: replyingTo.messageId,
+                message: replyingTo.message,
+                senderName: replyingTo.senderName,
+                senderId: replyingTo.senderId,
+              }
+            : undefined,
+        }
+
+        const eventData: EventType = {
+          type: "public_send_message",
+          payload,
+        }
+        send(JSON.stringify(eventData))
+        setMessage("")
+        onCancelReply()
+        toast.success("Message sent to the fun zone! 🚀", {
+          icon: "🎉",
+          style: { background: "#4ecdc4", color: "white" },
+        })
+
+        // Auto scroll to bottom after sending message
+        onScrollToBottom()
+      } catch (error) {
+        toast.error("Oops! Message got lost in space! 🛸", {
+          icon: "😅",
+          style: { background: "#ff6b6b", color: "white" },
+        })
+        console.error("Send error:", error)
+      } finally {
+        setIsSending(false)
+      }
+    },
+    [isConnected, user, message, replyingTo, send, onCancelReply, onScrollToBottom, isSending],
+  )
+
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setMessage(e.target.value)
+  }, [])
+
+  const handleKeyPress = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault()
+        handleSendMessage(e as any)
+      }
+    },
+    [handleSendMessage],
+  )
+
+  return (
+    <>
+      {/* Reply Preview */}
+      {replyingTo && <ReplyPreview replyingTo={replyingTo} onCancel={onCancelReply} />}
+
+      {/* Message Input */}
+      <form
+        onSubmit={handleSendMessage}
+        className="p-3 sm:p-6 bg-gradient-to-r from-purple-100 to-pink-100 border-t-2 border-purple-200"
+      >
+        <div className="flex gap-2 sm:gap-3 items-end">
+          <div className="flex-1 relative">
+            <Input
+              ref={ref}
+              value={message}
+              onChange={handleInputChange}
+              onKeyPress={handleKeyPress}
+              placeholder={replyingTo ? "Type your reply... ↩️" : "Type something awesome... ✨"}
+              className="pr-4 py-3 text-sm sm:text-base rounded-2xl border-2 border-purple-200 focus:border-purple-400 bg-white/80 backdrop-blur-sm shadow-lg"
+              maxLength={500}
+              disabled={!isConnected || !user || isSending}
+            />
+          </div>
+          <Button
+            type="submit"
+            disabled={!isConnected || !user || message.trim().length === 0 || isSending}
+            className="h-12 w-12 rounded-2xl bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 shadow-lg transform active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:transform-none"
+          >
+            {isSending ? (
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Send className="w-4 h-4 sm:w-5 sm:h-5" />
+            )}
+          </Button>
+        </div>
+
+        {/* Character counter */}
+        <CharacterCounter messageLength={message.length} />
+      </form>
+    </>
+  )
+})
+
+export default MessageInput

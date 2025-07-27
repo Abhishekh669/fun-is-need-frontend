@@ -1,264 +1,325 @@
 "use client"
+import type { ReactElement } from "react"
+import React from "react"
 
-import type React from "react"
-
-import { useRef, useState, useEffect } from "react"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { Send, Users, MessageCircle, X, Reply } from "lucide-react"
+import { useRef, useState, useEffect, useMemo, useCallback } from "react"
+import { Users, MessageCircle, ArrowDown, Loader2 } from "lucide-react"
 import { useWebSocketConnectionStore } from "@/lib/store/use-web-socket-store"
 import toast from "react-hot-toast"
-import type { UserType } from "@/lib/store/user-store"
-import type { EventType, MessageReplyType,  NewPayloadType, ReactionSendPayloadType } from "@/lib/utils/types/chat/types"
+import { useUserStore } from "@/lib/store/user-store"
+import type { EventType, MessageReplyType, ReactionSendPayloadType } from "@/lib/utils/types/chat/types"
 import ChatMessage from "./chat-message"
+import MessageInput from "./message-input"
+import { useGetPublicMessage } from "@/lib/hooks/tanstack-query/query-hook/messages/use-get-message"
+import { useVirtualizer } from "@tanstack/react-virtual"
+import { useChatStore } from "@/lib/store/use-chat-store"
 
-export default function ChatInterface({ user, messages }: { user: UserType | undefined; messages: NewPayloadType[] }) {
-  const [message, setMessage] = useState("")
-  const [isTyping, setIsTyping] = useState(false)
+// Memoized Chat Header Component
+const ChatHeader = React.memo(function ChatHeader({
+  isConnected,
+  messageCount,
+  uniqueUserCount,
+}: {
+  isConnected: boolean
+  messageCount: number
+  uniqueUserCount: number
+}): ReactElement {
+  return (
+    <div className="relative p-4 sm:p-6 bg-gradient-to-r from-purple-500 via-pink-500 to-blue-500 text-white">
+      <div className="absolute inset-0 bg-black/10"></div>
+      <div className="relative flex items-center justify-between">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="relative">
+            <MessageCircle className="w-6 h-6 sm:w-8 sm:h-8 animate-bounce" />
+            <div
+              className={`absolute -top-1 -right-1 w-3 h-3 sm:w-4 sm:h-4 rounded-full ${
+                isConnected ? "bg-green-400 animate-pulse" : "bg-red-400"
+              } border-2 border-white`}
+            />
+          </div>
+          <div>
+            <h3 className="font-bold text-lg sm:text-xl">Fun Zone Chat 🎉</h3>
+            <p className="text-xs sm:text-sm opacity-90 flex items-center gap-1">
+              <Users className="w-3 h-3 sm:w-4 sm:h-4" />
+              {messageCount > 0 ? `${uniqueUserCount} people chatting` : "Be the first to chat!"}
+            </p>
+          </div>
+        </div>
+        <div className="text-right">
+          <div
+            className={`inline-flex items-center gap-1 sm:gap-2 px-2 py-1 sm:px-3 sm:py-1 rounded-full text-xs sm:text-sm font-medium ${
+              isConnected ? "bg-green-400/20 text-green-100" : "bg-red-400/20 text-red-100"
+            }`}
+          >
+            <div className={`w-2 h-2 rounded-full ${isConnected ? "bg-green-300 animate-pulse" : "bg-red-300"}`} />
+            <span className="hidden sm:inline">{isConnected ? "Live & Buzzing!" : "Reconnecting..."}</span>
+            <span className="sm:hidden">{isConnected ? "Live" : "..."}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+})
+
+// Memoized Loading Indicator Component
+const LoadingIndicator = React.memo(function LoadingIndicator(): ReactElement {
+  return (
+    <div className="flex items-center justify-center p-4 bg-purple-50 border-b border-purple-200">
+      <div className="flex items-center gap-2 text-purple-600">
+        <Loader2 className="w-4 h-4 animate-spin" />
+        <span className="text-sm">Loading older messages...</span>
+      </div>
+    </div>
+  )
+})
+
+// Memoized Empty State Component
+const EmptyState = React.memo(function EmptyState(): ReactElement {
+  return (
+    <div className="flex items-center justify-center h-full text-center py-10 sm:py-20">
+      <div className="space-y-4">
+        <div className="text-4xl sm:text-6xl animate-bounce">💬</div>
+        <div className="space-y-2">
+          <h3 className="text-lg sm:text-xl font-bold text-purple-600">No messages yet!</h3>
+          <p className="text-sm sm:text-base text-gray-600">Be the first to break the ice! 🧊✨</p>
+          <div className="flex justify-center gap-2 text-xl sm:text-2xl">
+            <span className="animate-pulse">🎉</span>
+            <span className="animate-pulse delay-100">🚀</span>
+            <span className="animate-pulse delay-200">💫</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+})
+
+export default function ChatInterface(): ReactElement {
+  const { messages, setMessages } = useChatStore()
+  const { user } = useUserStore()
+  const { data, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = useGetPublicMessage()
   const [replyingTo, setReplyingTo] = useState<MessageReplyType | null>(null)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false)
+  const [isInitialLoad, setIsInitialLoad] = useState(true)
+  const parentRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const { socket, isConnected, send } = useWebSocketConnectionStore()
+  const { isConnected, send } = useWebSocketConnectionStore()
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }
+  const paginatedMessages = useMemo(() => (data ? data.pages.flatMap((page) => page.rows) : []), [data])
 
-  useEffect(() => {
-    scrollToBottom()
+  // Memoize unique user count
+  const uniqueUserCount = useMemo(() => {
+    return new Set(messages.map((m) => m.userId)).size
   }, [messages])
 
-  const handleSendMessage = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!isConnected) {
-      toast.error("Oops! Not connected to the fun zone! 🚫", {
-        icon: "🔌",
-        style: { background: "#ff6b6b", color: "white" },
-      })
-      return
+  // Create virtualizer with proper chat behavior
+  const rowVirtualizer = useVirtualizer({
+    count: hasNextPage ? messages.length + 1 : messages.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 120,
+    overscan: 10,
+  })
+
+  // Set messages from paginated data
+  useEffect(() => {
+    if (isLoading && !isFetchingNextPage) return
+    if (data) {
+      setMessages(paginatedMessages)
     }
+  }, [isLoading, isFetchingNextPage, setMessages, data, paginatedMessages])
 
-    if (!user || message.trim().length === 0) return
+  // Auto-scroll to bottom on initial load and new messages
+  useEffect(() => {
+    if (isInitialLoad && messages.length > 0) {
+      setIsInitialLoad(false)
+      setTimeout(() => {
+        scrollToBottom()
+      }, 100)
+    }
+  }, [messages.length, isInitialLoad])
 
-    try {
-      const payload = {
-        userId: user.userId,
-        userName: user.userName,
-        message: message.trim(),
-        replyTo: replyingTo
-          ? {
-              messageId: replyingTo.messageId,
-              message: replyingTo.message,
-              senderName: replyingTo.senderName,
-              senderId : replyingTo.senderId
+  // Infinite scroll - fetch when scrolling to TOP (for older messages)
+  useEffect(() => {
+    const [firstItem] = rowVirtualizer.getVirtualItems()
+    if (!firstItem) return
+
+    // Check if we're near the top and should fetch more messages
+    if (firstItem.index <= 1 && hasNextPage && !isFetchingNextPage) {
+      const scrollElement = parentRef.current
+      if (scrollElement) {
+        const previousScrollHeight = scrollElement.scrollHeight
+        const previousScrollTop = scrollElement.scrollTop
+
+        fetchNextPage().then(() => {
+          // Maintain scroll position after new messages are loaded
+          setTimeout(() => {
+            if (scrollElement) {
+              const newScrollHeight = scrollElement.scrollHeight
+              const heightDifference = newScrollHeight - previousScrollHeight
+              scrollElement.scrollTop = previousScrollTop + heightDifference
             }
-          : undefined,
+          }, 50)
+        })
       }
-
-      console.log("this is pyaload before message sending : ", payload)
-
-      const eventData : EventType = {
-        type: "public_send_message",
-        payload,
-      }
-
-      send(JSON.stringify(eventData))
-      setMessage("")
-      setReplyingTo(null)
-      toast.success("Message sent to the fun zone! 🚀", {
-        icon: "🎉",
-        style: { background: "#4ecdc4", color: "white" },
-      })
-    } catch (error) {
-      toast.error("Oops! Message got lost in space! 🛸", {
-        icon: "😅",
-        style: { background: "#ff6b6b", color: "white" },
-      })
-      console.error("Send error:", error)
     }
-  }
+  }, [rowVirtualizer.getVirtualItems(), hasNextPage, isFetchingNextPage, fetchNextPage])
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setMessage(e.target.value)
-    setIsTyping(e.target.value.length > 0)
-  }
+  // Check scroll position for scroll-to-bottom button
+  const handleScroll = useCallback(() => {
+    if (parentRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = parentRef.current
+      const isNearBottom = scrollTop + clientHeight >= scrollHeight - 200
+      setShowScrollToBottom(!isNearBottom && messages.length > 0)
+    }
+  }, [messages.length])
 
-  const handleReply = (messageToReply: MessageReplyType) => {
+  useEffect(() => {
+    const scrollElement = parentRef.current
+    if (scrollElement) {
+      scrollElement.addEventListener("scroll", handleScroll)
+      return () => scrollElement.removeEventListener("scroll", handleScroll)
+    }
+  }, [handleScroll])
+
+  const scrollToBottom = useCallback(() => {
+    if (parentRef.current) {
+      parentRef.current.scrollTo({
+        top: parentRef.current.scrollHeight,
+        behavior: "smooth",
+      })
+    }
+  }, [])
+
+  const handleReply = useCallback((messageToReply: MessageReplyType) => {
     setReplyingTo(messageToReply)
     setTimeout(() => {
       inputRef.current?.focus()
     }, 100)
-  }
+  }, [])
 
-  const handleReaction = (messageId: string, emoji: string) => {
-    if(!user) {
-      toast.success("user not found refresh the page")
-      return;
-    }
-    const reactionPayload : ReactionSendPayloadType = {
-      userId : user.userId,
-      userName : user.userName,
-      messageId,
-      emoji 
-    }
+  const handleReaction = useCallback(
+    (messageId: string, emoji: string) => {
+      if (!user) {
+        toast.error("Please login to react to messages! 🔐")
+        return
+      }
 
-    const eventData : EventType = {
-      type : "public_reaction",
-      payload : reactionPayload
-    }
-    send(JSON.stringify(eventData))
-    toast.success(`Added reaction ${messageId} ${emoji} to message!`, {
-      icon: emoji,
-      duration: 1500,
-    })
-  }
+      const reactionPayload: ReactionSendPayloadType = {
+        userId: user.userId,
+        userName: user.userName,
+        messageId,
+        emoji,
+      }
+      const eventData: EventType = {
+        type: "public_reaction",
+        payload: reactionPayload,
+      }
+      send(JSON.stringify(eventData))
+      toast.success(`Reacted with ${emoji}!`, {
+        icon: emoji,
+        duration: 1500,
+      })
+    },
+    [user, send],
+  )
 
-  const cancelReply = () => {
+  const cancelReply = useCallback(() => {
     setReplyingTo(null)
-  }
+  }, [])
 
+  // Auto-scroll to bottom when new message is sent
+  const handleScrollToBottom = useCallback(() => {
+    setTimeout(() => {
+      scrollToBottom()
+    }, 100)
+  }, [scrollToBottom])
+console.log("this is pagination message  ;",paginatedMessages)
   return (
     <div className="flex flex-col h-[500px] sm:h-[650px] bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 rounded-2xl sm:rounded-3xl border-2 border-purple-200 shadow-2xl overflow-hidden">
-      {/* Chat Header - Mobile Optimized */}
-      <div className="relative p-4 sm:p-6 bg-gradient-to-r from-purple-500 via-pink-500 to-blue-500 text-white">
-        <div className="absolute inset-0 bg-black/10"></div>
-        <div className="relative flex items-center justify-between">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="relative">
-              <MessageCircle className="w-6 h-6 sm:w-8 sm:h-8 animate-bounce" />
-              <div
-                className={`absolute -top-1 -right-1 w-3 h-3 sm:w-4 sm:h-4 rounded-full ${
-                  isConnected ? "bg-green-400 animate-pulse" : "bg-red-400"
-                } border-2 border-white`}
-              />
-            </div>
-            <div>
-              <h3 className="font-bold text-lg sm:text-xl">Fun Zone Chat 🎉</h3>
-              <p className="text-xs sm:text-sm opacity-90 flex items-center gap-1">
-                <Users className="w-3 h-3 sm:w-4 sm:h-4" />
-                {messages.length > 0
-                  ? `${new Set(messages.map((m) => m.userId)).size} people chatting`
-                  : "Be the first to chat!"}
-              </p>
-            </div>
-          </div>
-          <div className="text-right">
+      {/* Chat Header */}
+      <ChatHeader isConnected={isConnected} messageCount={messages.length} uniqueUserCount={uniqueUserCount} />
+
+      {/* Messages Area */}
+      <div className="flex-1 relative">
+        <div
+          ref={parentRef}
+          className="h-full overflow-auto"
+          style={{
+            contain: "strict",
+          }}
+        >
+          {/* Loading indicator at top when fetching older messages */}
+          {isFetchingNextPage && <LoadingIndicator />}
+
+          {/* Messages */}
+          {messages.length > 0 ? (
             <div
-              className={`inline-flex items-center gap-1 sm:gap-2 px-2 py-1 sm:px-3 sm:py-1 rounded-full text-xs sm:text-sm font-medium ${
-                isConnected ? "bg-green-400/20 text-green-100" : "bg-red-400/20 text-red-100"
-              }`}
+              style={{
+                height: `${rowVirtualizer.getTotalSize()}px`,
+                position: "relative",
+              }}
             >
-              <div className={`w-2 h-2 rounded-full ${isConnected ? "bg-green-300 animate-pulse" : "bg-red-300"}`} />
-              <span className="hidden sm:inline">{isConnected ? "Live & Buzzing!" : "Reconnecting..."}</span>
-              <span className="sm:hidden">{isConnected ? "Live" : "..."}</span>
+              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                const isLoaderRow = virtualRow.index > messages.length - 1
+                const message = messages[virtualRow.index]
+
+                return (
+                  <div
+                    key={virtualRow.index}
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      width: "100%",
+                      height: `${virtualRow.size}px`,
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                  >
+                    {isLoaderRow ? (
+                      <div className="flex items-center justify-center h-full p-4">
+                        <div className="text-sm text-gray-500">
+                          {hasNextPage ? "Scroll up for more messages..." : "You've reached the beginning! 🎉"}
+                        </div>
+                      </div>
+                    ) : message && user ? (
+                      <div className="px-3 py-2">
+                        <ChatMessage
+                          message={message}
+                          isCurrentUser={message.userId === user.userId}
+                          currentUserId={user.userId}
+                          onReply={handleReply}
+                          onReaction={handleReaction}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                )
+              })}
             </div>
-          </div>
+          ) : (
+            <EmptyState />
+          )}
         </div>
+
+        {/* Scroll to bottom button */}
+        {showScrollToBottom && (
+          <button
+            onClick={scrollToBottom}
+            className="absolute bottom-4 right-4 bg-purple-500 hover:bg-purple-600 text-white p-3 rounded-full shadow-lg transition-all duration-200 transform hover:scale-105 active:scale-95 z-10"
+          >
+            <ArrowDown className="w-5 h-5" />
+          </button>
+        )}
       </div>
 
-      {/* Messages Area - Mobile Optimized */}
-      <ScrollArea className="flex-1 p-3 sm:p-6 relative">
-        <div className="absolute inset-0 opacity-5">
-          <div className="w-full h-full bg-gradient-to-br from-purple-200 to-pink-200 rounded-lg"></div>
-        </div>
-        <div className="relative space-y-2">
-          {messages && messages.length > 0 ? (
-            messages.map((msg, index) => (
-              <ChatMessage
-                key={msg.id || index}
-                message={msg}
-                isCurrentUser={user?.userId === msg.userId}
-                currentUserId={user?.userId || ""}
-                onReply={handleReply}
-                onReaction={handleReaction}
-              />
-            ))
-          ) : (
-            <div className="flex items-center justify-center h-full text-center py-10 sm:py-20">
-              <div className="space-y-4">
-                <div className="text-4xl sm:text-6xl animate-bounce">💬</div>
-                <div className="space-y-2">
-                  <h3 className="text-lg sm:text-xl font-bold text-purple-600">No messages yet!</h3>
-                  <p className="text-sm sm:text-base text-gray-600">Be the first to break the ice! 🧊✨</p>
-                  <div className="flex justify-center gap-2 text-xl sm:text-2xl">
-                    <span className="animate-pulse">🎉</span>
-                    <span className="animate-pulse delay-100">🚀</span>
-                    <span className="animate-pulse delay-200">💫</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-      </ScrollArea>
-
-      {/* Reply Preview - Mobile Optimized */}
-      {replyingTo && (
-        <div className="px-3 py-2 sm:px-6 sm:py-3 bg-purple-50 border-t border-purple-200">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm min-w-0 flex-1">
-              <Reply className="w-4 h-4 text-purple-500 flex-shrink-0" />
-              <span className="text-purple-600 font-medium flex-shrink-0">Replying to {replyingTo.senderName}</span>
-              <span className="text-gray-500 truncate">{replyingTo.message}</span>
-            </div>
-            <Button variant="ghost" size="sm" onClick={cancelReply} className="flex-shrink-0 ml-2">
-              <X className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Message Input - Mobile Optimized */}
-      <form
-        onSubmit={handleSendMessage}
-        className="p-3 sm:p-6 bg-gradient-to-r from-purple-100 to-pink-100 border-t-2 border-purple-200"
-      >
-        <div className="flex gap-2 sm:gap-3 items-end">
-          <div className="flex-1 relative">
-            <Input
-              ref={inputRef}
-              value={message}
-              onChange={handleInputChange}
-              placeholder={replyingTo ? "Type your reply... ↩️" : "Type something awesome... ✨"}
-              className="pr-12 sm:pr-16 py-3 text-sm sm:text-base rounded-2xl border-2 border-purple-200 focus:border-purple-400 bg-white/80 backdrop-blur-sm shadow-lg"
-              maxLength={500}
-              disabled={!isConnected || !user}
-            />
-            {isTyping && (
-              <div className="absolute right-3 sm:right-4 top-1/2 transform -translate-y-1/2">
-                <div className="flex gap-1">
-                  <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-purple-400 rounded-full animate-bounce"></div>
-                  <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-pink-400 rounded-full animate-bounce delay-100"></div>
-                  <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-blue-400 rounded-full animate-bounce delay-200"></div>
-                </div>
-              </div>
-            )}
-          </div>
-          <Button
-            type="submit"
-            disabled={!isConnected || !user || message.trim().length === 0}
-            className="h-12 w-12 rounded-2xl bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 shadow-lg transform active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:transform-none"
-          >
-            <Send className="w-4 h-4 sm:w-5 sm:h-5" />
-          </Button>
-        </div>
-
-        {/* Character counter - Mobile Optimized */}
-        {message.length > 400 && (
-          <div className="mt-2 text-center">
-            <span
-              className={`text-xs px-2 py-1 sm:px-3 sm:py-1 rounded-full ${
-                message.length > 450 ? "bg-red-100 text-red-600" : "bg-yellow-100 text-yellow-600"
-              }`}
-            >
-              {500 - message.length} characters left!
-              {message.length > 450 ? " 🔥" : " ✍️"}
-            </span>
-          </div>
-        )}
-      </form>
+      {/* Message Input */}
+      <MessageInput
+        ref={inputRef}
+        user={user}
+        isConnected={isConnected}
+        replyingTo={replyingTo}
+        onCancelReply={cancelReply}
+        onScrollToBottom={handleScrollToBottom}
+      />
     </div>
   )
 }

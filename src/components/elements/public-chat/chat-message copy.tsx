@@ -1,7 +1,7 @@
 "use client"
-import { useEffect, useState, useRef, useCallback } from "react"
-import React from "react"
-import { Smile, Reply, MoreHorizontal } from "lucide-react"
+
+import { useEffect, useState, useRef } from "react"
+import { Smile, Reply, MoreHorizontal, X } from "lucide-react"
 import type { MessageReplyType, NewPayloadType, ReactionType } from "@/lib/utils/types/chat/types"
 import toast from "react-hot-toast"
 import FunAvatar from "./fun-avatar"
@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button"
 import { emojiCategories } from "@/lib/utils/emoji"
 
 // Enhanced Message Reactions with "more" functionality
-const MessageReactionsWithMore = React.memo(function MessageReactionsWithMore({
+function MessageReactionsWithMore({
   reactions,
   currentUserId,
   onReactionClick,
@@ -50,9 +50,8 @@ const MessageReactionsWithMore = React.memo(function MessageReactionsWithMore({
           <Badge
             key={emoji}
             variant={hasUserReacted ? "default" : "secondary"}
-            className={`cursor-pointer active:scale-110 transition-transform text-xs sm:text-sm ${
-              hasUserReacted ? "bg-purple-500 text-white" : "bg-gray-100 hover:bg-gray-200 active:bg-gray-300"
-            }`}
+            className={`cursor-pointer active:scale-110 transition-transform text-xs sm:text-sm ${hasUserReacted ? "bg-purple-500 text-white" : "bg-gray-100 hover:bg-gray-200 active:bg-gray-300"
+              }`}
             onClick={() => onReactionClick(emoji)}
           >
             <span className="mr-1">{emoji}</span>
@@ -60,6 +59,7 @@ const MessageReactionsWithMore = React.memo(function MessageReactionsWithMore({
           </Badge>
         )
       })}
+
       {shouldShowMore && (
         <Badge
           variant="outline"
@@ -71,10 +71,10 @@ const MessageReactionsWithMore = React.memo(function MessageReactionsWithMore({
       )}
     </div>
   )
-})
+}
 
 // Reactions List for Dialog
-const ReactionsList = React.memo(function ReactionsList({
+function ReactionsList({
   reactions,
   currentUserId,
   onReactionClick,
@@ -135,11 +135,10 @@ const ReactionsList = React.memo(function ReactionsList({
             </div>
             <button
               onClick={() => onReactionClick(emoji)}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors active:scale-95 ${
-                hasUserReacted
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors active:scale-95 ${hasUserReacted
                   ? "bg-purple-500 text-white hover:bg-purple-600"
                   : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
-              }`}
+                }`}
             >
               {hasUserReacted ? "Remove" : "Add"}
             </button>
@@ -148,10 +147,10 @@ const ReactionsList = React.memo(function ReactionsList({
       })}
     </div>
   )
-})
+}
 
 // Extended Emoji Picker Dialog
-const ExtendedEmojiPicker = React.memo(function ExtendedEmojiPicker({
+function ExtendedEmojiPicker({
   open,
   onOpenChange,
   onEmojiSelect,
@@ -160,6 +159,8 @@ const ExtendedEmojiPicker = React.memo(function ExtendedEmojiPicker({
   onOpenChange: (open: boolean) => void
   onEmojiSelect: (emoji: string) => void
 }) {
+
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl bg-white rounded-2xl shadow-2xl border-2 border-purple-200 max-h-[80vh] overflow-hidden">
@@ -187,9 +188,9 @@ const ExtendedEmojiPicker = React.memo(function ExtendedEmojiPicker({
       </DialogContent>
     </Dialog>
   )
-})
+}
 
-const ChatMessage = React.memo(function ChatMessage({
+export default function ChatMessage({
   message,
   isCurrentUser,
   currentUserId,
@@ -203,6 +204,7 @@ const ChatMessage = React.memo(function ChatMessage({
   onReaction?: (messageId: string, emoji: string) => void
 }) {
   const [isVisible, setIsVisible] = useState(false)
+  const [showActions, setShowActions] = useState(false)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [showMoreOptions, setShowMoreOptions] = useState(false)
   const [showReactionsDialog, setShowReactionsDialog] = useState(false)
@@ -218,30 +220,33 @@ const ChatMessage = React.memo(function ChatMessage({
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent | TouchEvent) => {
       if (actionsRef.current && !actionsRef.current.contains(event.target as Node)) {
+        setShowActions(false)
         setShowEmojiPicker(false)
         setShowMoreOptions(false)
       }
     }
-    if (showEmojiPicker || showMoreOptions) {
+
+    if (showActions || showEmojiPicker || showMoreOptions) {
       document.addEventListener("mousedown", handleClickOutside)
       document.addEventListener("touchstart", handleClickOutside)
     }
+
     return () => {
       document.removeEventListener("mousedown", handleClickOutside)
       document.removeEventListener("touchstart", handleClickOutside)
     }
-  }, [showEmojiPicker, showMoreOptions])
+  }, [showActions, showEmojiPicker, showMoreOptions])
 
-  const formatTime = useCallback((timestamp: string | Date) => {
+  const formatTime = (timestamp: string | Date) => {
     const date = new Date(timestamp)
     return date.toLocaleTimeString("en-US", {
       hour: "2-digit",
       minute: "2-digit",
       hour12: true,
     })
-  }, [])
+  }
 
-  const handleReply = useCallback(() => {
+  const handleReply = () => {
     const payload: MessageReplyType = {
       senderId: message.userId,
       senderName: message.userName,
@@ -249,70 +254,66 @@ const ChatMessage = React.memo(function ChatMessage({
       message: message.message,
     }
     onReply(payload)
+    setShowActions(false)
     setShowMoreOptions(false)
     toast.success("Reply mode activated! 💬", {
       icon: "↩️",
       duration: 1500,
     })
-  }, [message, onReply])
+  }
 
-  const handleReaction = useCallback(
-    (emoji: string) => {
-      const existingReaction = message.reactions?.find((r) => r.userId === currentUserId)
-      // If the same emoji was already sent by this user, remove it
-      if (existingReaction?.emoji === emoji) {
-        emoji = ""
-      }
-      if (onReaction) {
-        onReaction(message.id, emoji)
-      }
-      // Close all popovers after reaction
-      setShowEmojiPicker(false)
-      setShowMoreOptions(false)
-      setShowExtendedEmojiPicker(false)
-      if (emoji) {
-        toast.success(`Reacted with ${emoji}!`, {
-          icon: emoji,
-          duration: 1500,
-        })
-      }
-    },
-    [message, currentUserId, onReaction],
-  )
+  const handleReaction = (emoji: string) => {
+    const existingReaction = message.reactions?.find(
+      (r) => r.userId === currentUserId
+    );
 
-  const handleMoreOptions = useCallback(
-    (action: string) => {
-      setShowMoreOptions(false)
-      switch (action) {
-        case "copy":
-          navigator.clipboard?.writeText(message.message)
-          toast.success("Message copied! 📋", { duration: 1500 })
-          break
-        case "report":
-          toast.success("Message reported! 🚨", { duration: 1500 })
-          break
-        case "reactions":
-          setTimeout(() => {
-            setShowReactionsDialog(true)
-          }, 0)
-          break
-        case "moreEmojis":
-          setTimeout(() => {
-            setShowExtendedEmojiPicker(true)
-          }, 0)
-          break
-        default:
-          break
-      }
-    },
-    [message.message],
-  )
+    // If the same emoji was already sent by this user, do nothing
+    if (existingReaction?.emoji === emoji) {
+       emoji = ""
+    }
+
+    if (onReaction) {
+      onReaction(message.id, emoji);
+    }
+
+    setShowEmojiPicker(false);
+    setShowActions(false);
+    setShowMoreOptions(false);
+    setShowExtendedEmojiPicker(false)
+
+    toast.success(`Reacted with ${emoji}!`, {
+      icon: emoji,
+      duration: 1500,
+    });
+  };
+
+  const handleMoreOptions = (action: string) => {
+    setShowMoreOptions(false)
+    setShowActions(false)
+
+    switch (action) {
+      case "copy":
+        navigator.clipboard?.writeText(message.message)
+        toast.success("Message copied! 📋", { duration: 1500 })
+        break
+      case "report":
+        toast.success("Message reported! 🚨", { duration: 1500 })
+        break
+      case "reactions":
+        setShowReactionsDialog(true)
+        break
+      case "moreEmojis":
+        setShowExtendedEmojiPicker(true)
+        break
+      default:
+        break
+    }
+  }
 
   return (
     <div
-      className={`flex gap-2 sm:gap-3 mb-4 sm:mb-6 ${isCurrentUser ? "flex-row-reverse" : "flex-row"} ${
-        isVisible ? "animate-in slide-in-from-bottom-2 duration-300" : "opacity-0"
-      }`}
+      className={`flex gap-2 sm:gap-3 mb-4 sm:mb-6 ${isCurrentUser ? "flex-row-reverse" : "flex-row"} ${isVisible ? "animate-in slide-in-from-bottom-2 duration-300" : "opacity-0"
+        }`}
     >
       {/* Fun Avatar */}
       <FunAvatar name={message.userName} isCurrentUser={isCurrentUser} />
@@ -325,9 +326,8 @@ const ChatMessage = React.memo(function ChatMessage({
         {/* Username and Time */}
         <div className={`flex items-center gap-2 mb-2 ${isCurrentUser ? "flex-row-reverse" : "flex-row"}`}>
           <span
-            className={`text-xs sm:text-sm font-bold ${
-              isCurrentUser ? "text-orange-600" : "text-purple-600"
-            } transition-transform cursor-default`}
+            className={`text-xs sm:text-sm font-bold ${isCurrentUser ? "text-orange-600" : "text-purple-600"
+              } transition-transform cursor-default`}
           >
             {message.userName} ✨
           </span>
@@ -339,7 +339,7 @@ const ChatMessage = React.memo(function ChatMessage({
         {/* Reply Preview */}
         {message.replyTo && <ReplyPreview replyTo={message.replyTo} />}
 
-        {/* Message Container with Actions */}
+        {/* Message Container with Always Visible Actions */}
         <div className="relative flex items-center gap-2">
           {/* Left Side Actions (for current user messages) */}
           {isCurrentUser && (
@@ -352,8 +352,10 @@ const ChatMessage = React.memo(function ChatMessage({
                       variant="ghost"
                       size="sm"
                       className="h-7 w-7 p-0 hover:bg-purple-100 rounded-full relative group"
+                      onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                     >
                       <Smile className="h-3.5 w-3.5 text-purple-500" />
+                      {/* Hover Tooltip */}
                       <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
                         Add Reaction
                       </div>
@@ -383,6 +385,7 @@ const ChatMessage = React.memo(function ChatMessage({
                 onClick={handleReply}
               >
                 <Reply className="h-3.5 w-3.5 text-purple-500" />
+                {/* Hover Tooltip */}
                 <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
                   Reply
                 </div>
@@ -396,8 +399,10 @@ const ChatMessage = React.memo(function ChatMessage({
                       variant="ghost"
                       size="sm"
                       className="h-7 w-7 p-0 hover:bg-purple-100 rounded-full relative group"
+                      onClick={() => setShowMoreOptions(!showMoreOptions)}
                     >
                       <MoreHorizontal className="h-3.5 w-3.5 text-purple-500" />
+                      {/* Hover Tooltip */}
                       <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
                         More Options
                       </div>
@@ -444,11 +449,10 @@ const ChatMessage = React.memo(function ChatMessage({
 
           {/* Message Bubble */}
           <div
-            className={`px-3 sm:px-4 py-2 sm:py-3 rounded-2xl max-w-full break-words shadow-lg transition-all duration-200 ${
-              isCurrentUser
+            className={`px-3 sm:px-4 py-2 sm:py-3 rounded-2xl max-w-full break-words shadow-lg transition-all duration-200 ${isCurrentUser
                 ? "bg-gradient-to-r from-orange-400 to-pink-500 text-white rounded-br-md shadow-orange-200"
                 : "bg-gradient-to-r from-purple-100 to-blue-100 text-gray-800 rounded-bl-md border border-purple-200"
-            }`}
+              }`}
           >
             <p className="text-sm leading-relaxed">{message.message}</p>
           </div>
@@ -464,8 +468,10 @@ const ChatMessage = React.memo(function ChatMessage({
                       variant="ghost"
                       size="sm"
                       className="h-7 w-7 p-0 hover:bg-purple-100 rounded-full relative group"
+                      onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                     >
                       <Smile className="h-3.5 w-3.5 text-purple-500" />
+                      {/* Hover Tooltip */}
                       <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
                         Add Reaction
                       </div>
@@ -495,6 +501,7 @@ const ChatMessage = React.memo(function ChatMessage({
                 onClick={handleReply}
               >
                 <Reply className="h-3.5 w-3.5 text-purple-500" />
+                {/* Hover Tooltip */}
                 <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
                   Reply
                 </div>
@@ -508,8 +515,10 @@ const ChatMessage = React.memo(function ChatMessage({
                       variant="ghost"
                       size="sm"
                       className="h-7 w-7 p-0 hover:bg-purple-100 rounded-full relative group"
+                      onClick={() => setShowMoreOptions(!showMoreOptions)}
                     >
                       <MoreHorizontal className="h-3.5 w-3.5 text-purple-500" />
+                      {/* Hover Tooltip */}
                       <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
                         More Options
                       </div>
@@ -555,7 +564,7 @@ const ChatMessage = React.memo(function ChatMessage({
           )}
         </div>
 
-        {/* Message Reactions */}
+        {/* Message Reactions with "more" functionality */}
         <MessageReactionsWithMore
           reactions={message.reactions || []}
           currentUserId={currentUserId}
@@ -588,9 +597,152 @@ const ChatMessage = React.memo(function ChatMessage({
           onOpenChange={setShowExtendedEmojiPicker}
           onEmojiSelect={handleReaction}
         />
+
+        {/* Mobile-Friendly Message Actions (for mobile devices) */}
+        {showActions && (
+          <div
+            className={`absolute top-full mt-2 ${isCurrentUser ? "right-0" : "left-0"
+              } bg-white rounded-2xl shadow-2xl border-2 border-purple-200 p-3 z-50 min-w-[250px] max-w-[300px] sm:hidden`}
+          >
+            {/* Quick Emoji Reactions */}
+            <div className="mb-3">
+              <p className="text-xs font-semibold text-gray-600 mb-2 px-1">Quick Reactions</p>
+              <div className="flex flex-wrap gap-2">
+                {["👍", "❤️", "😂", "😮", "🎉", "🔥"].map((emoji) => (
+                  <button
+                    key={emoji}
+                    onClick={() => handleReaction(emoji)}
+                    className="text-xl p-2 hover:bg-gray-100 rounded-lg transition-colors active:scale-95"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="space-y-1">
+              {/* More Emojis Button */}
+              <button
+                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-purple-50 rounded-lg transition-colors active:scale-95"
+              >
+                <Smile className="h-5 w-5 text-purple-500" />
+                <span className="text-sm font-medium">More Emojis</span>
+              </button>
+
+              {/* Reply Button */}
+              <button
+                onClick={handleReply}
+                className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-purple-50 rounded-lg transition-colors active:scale-95"
+              >
+                <Reply className="h-5 w-5 text-purple-500" />
+                <span className="text-sm font-medium">Reply</span>
+              </button>
+
+              {/* View All Reactions */}
+              <button
+                onClick={() => handleMoreOptions("reactions")}
+                className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-purple-50 rounded-lg transition-colors active:scale-95"
+              >
+                <span className="text-lg">😊</span>
+                <span className="text-sm font-medium">View All Reactions</span>
+              </button>
+
+              {/* Extended Emoji Picker */}
+              <button
+                onClick={() => handleMoreOptions("moreEmojis")}
+                className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-purple-50 rounded-lg transition-colors active:scale-95"
+              >
+                <span className="text-lg">😀</span>
+                <span className="text-sm font-medium">All Emojis</span>
+              </button>
+
+              {/* More Options */}
+              <button
+                onClick={() => setShowMoreOptions(!showMoreOptions)}
+                className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-purple-50 rounded-lg transition-colors active:scale-95"
+              >
+                <MoreHorizontal className="h-5 w-5 text-purple-500" />
+                <span className="text-sm font-medium">More Options</span>
+              </button>
+            </div>
+
+            {/* Extended Emoji Picker */}
+            {showEmojiPicker && (
+              <div className="mt-3 pt-3 border-t border-gray-200">
+                <p className="text-xs font-semibold text-gray-600 mb-2 px-1">All Emojis</p>
+                <div className="grid grid-cols-6 gap-2 max-h-32 overflow-y-auto">
+                  {[
+                    "👍",
+                    "👎",
+                    "❤️",
+                    "😂",
+                    "😮",
+                    "😢",
+                    "😡",
+                    "🎉",
+                    "🔥",
+                    "👏",
+                    "💯",
+                    "🚀",
+                    "✨",
+                    "💫",
+                    "⭐",
+                    "🌟",
+                    "💖",
+                    "💕",
+                    "🥳",
+                    "😍",
+                    "🤩",
+                    "😎",
+                    "🤔",
+                    "😴",
+                    "🙄",
+                  ].map((emoji) => (
+                    <button
+                      key={emoji}
+                      onClick={() => handleReaction(emoji)}
+                      className="text-lg p-2 hover:bg-gray-100 rounded-lg transition-colors active:scale-95"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* More Options Menu */}
+            {showMoreOptions && (
+              <div className="mt-3 pt-3 border-t border-gray-200 space-y-1">
+                <button
+                  onClick={() => handleMoreOptions("copy")}
+                  className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-gray-50 rounded-lg transition-colors active:scale-95"
+                >
+                  <span className="text-sm">📋 Copy Message</span>
+                </button>
+                <button
+                  onClick={() => handleMoreOptions("report")}
+                  className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-red-50 rounded-lg transition-colors active:scale-95 text-red-600"
+                >
+                  <span className="text-sm">🚨 Report Message</span>
+                </button>
+              </div>
+            )}
+
+            {/* Close button */}
+            <div className="mt-3 pt-3 border-t border-gray-200">
+              <button
+                onClick={() => setShowActions(false)}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 text-gray-500 hover:bg-gray-50 rounded-lg transition-colors active:scale-95"
+              >
+                <X className="h-4 w-4" />
+                <span className="text-sm">Close</span>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
-})
-
-export default ChatMessage
+}
