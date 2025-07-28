@@ -15,6 +15,8 @@ type WebSocketConnectionStore = {
   isConnected: boolean;
   isConnecting: boolean;
   lastUrl: string | null;
+  totalUser : number,
+  updateTotaluser : (total : number)=> void, 
   connect: (url: string) => void;
   send: (data: string) => boolean;
   disconnect: () => void;
@@ -23,6 +25,8 @@ type WebSocketConnectionStore = {
 
 export const useWebSocketConnectionStore = create<WebSocketConnectionStore>()(
   subscribeWithSelector((set, get) => ({
+    totalUser :  0,
+    updateTotaluser : (total) => set({totalUser : total}),
     socket: globalSocket,
     isConnected: globalSocket?.readyState === WebSocket.OPEN || false,
     isConnecting: false,

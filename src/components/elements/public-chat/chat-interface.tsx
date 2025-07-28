@@ -1,6 +1,6 @@
 "use client"
 import type { ReactElement } from "react"
-import React, { useRef, useState, useEffect, useMemo, useCallback } from "react"
+import React, { useRef, useState, useEffect, useMemo, useCallback, forwardRef, useImperativeHandle } from "react"
 import { Users, MessageCircle, ArrowDown, Loader2 } from "lucide-react"
 import { useWebSocketConnectionStore } from "@/lib/store/use-web-socket-store"
 import toast from "react-hot-toast"
@@ -8,9 +8,10 @@ import { useUserStore } from "@/lib/store/user-store"
 import type { EventType, MessageReplyType, ReactionSendPayloadType, NewPayloadType } from "@/lib/utils/types/chat/types"
 import ChatMessage from "./chat-message"
 import MessageInput from "./message-input"
-import { useGetPublicMessage } from "@/lib/hooks/tanstack-query/query-hook/messages/use-get-message"
+import { fetchPublicMessages, useGetPublicMessage } from "@/lib/hooks/tanstack-query/query-hook/messages/use-get-message"
 import { useChatStore } from "@/lib/store/use-chat-store"
 import { useVirtualizer } from "@tanstack/react-virtual"
+import { useQueryClient } from "@tanstack/react-query"
 
 // Memoized Chat Header Component
 const ChatHeader = React.memo(function ChatHeader({
@@ -91,11 +92,16 @@ const EmptyState = React.memo(function EmptyState(): ReactElement {
   )
 })
 
-export default function ChatInterface(): ReactElement {
+export interface ChildRef{
+triggerAction: () => Promise<void>
+
+}
+
+const  ChatInterface = forwardRef<ChildRef>((props, ref) => {
   const { messages, setMessages, addMessage, setReactionUpdate } = useChatStore()
   const { user } = useUserStore()
   const { isConnected, send, socket } = useWebSocketConnectionStore()
-  const { data, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = useGetPublicMessage()
+  const { data, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage , refetch} = useGetPublicMessage()
 
   const [replyingTo, setReplyingTo] = useState<MessageReplyType | null>(null)
   const [showScrollToBottom, setShowScrollToBottom] = useState(false)
@@ -108,6 +114,7 @@ export default function ChatInterface(): ReactElement {
   const inputRef = useRef<HTMLInputElement>(null)
   const scrollTimeoutRef = useRef<NodeJS.Timeout>(null)
   const lastMessageCountRef = useRef(0)
+  const queryClient = useQueryClient();
 
   // Track window width for responsive behavior
   useEffect(() => {
@@ -182,6 +189,13 @@ export default function ChatInterface(): ReactElement {
       return height ?? estimateMessageSize(0)
     },
   })
+
+  useImperativeHandle(ref, ()=>({
+    triggerAction : async() =>{
+       const data = await fetchPublicMessages(100, 0);
+       setMessages(data.rows || [])
+    }
+  }))
 
   // Check if user is near bottom
   const checkIfNearBottom = useCallback(() => {
@@ -488,3 +502,6 @@ export default function ChatInterface(): ReactElement {
     </div>
   )
 }
+)
+
+export default ChatInterface

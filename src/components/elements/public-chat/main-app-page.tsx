@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { useGetCheckUserName } from "@/lib/hooks/tanstack-query/query-hook/user/use-get-username"
 import { useCreateTempUser } from "@/lib/hooks/tanstack-query/mutate-hook/user/use-create-temp-user"
 import { CheckUserFromToken } from "@/lib/actions/user/get/check-token"
@@ -11,9 +11,11 @@ import { useWebSocketConnectionStore } from "@/lib/store/use-web-socket-store"
 import { useChatStore } from "@/lib/store/use-chat-store"
 import toast from "react-hot-toast"
 import { Button } from "@/components/ui/button"
-import ChatInterface from "./chat-interface"
+import ChatInterface, { ChildRef } from "./chat-interface"
 import UsernameModal from "./user-name-model"
-import { EventType, NewEventType, NewPayloadType, ReactionSendPayloadType } from "@/lib/utils/types/chat/types"
+import { DeletePublicMessage, EventType,   NewPayloadType, NewUserPayloadType, ReactionSendPayloadType } from "@/lib/utils/types/chat/types"
+import { useQueryClient } from "@tanstack/react-query"
+import { fetchPublicMessages, useGetPublicMessage } from "@/lib/hooks/tanstack-query/query-hook/messages/use-get-message"
 
 
 
@@ -26,16 +28,19 @@ export default function MainAppPage({ tokenStatus, user }: { tokenStatus: boolea
     const isUsernameValid = userData?.success && userData?.state
     const [open, setOpen] = useState(tokenStatus)
     const { setUser } = useUserStore()
-    const {  addMessage, setReactionUpdate } = useChatStore()
-    const { socket, isConnected, connect } = useWebSocketConnectionStore()
+    const { addMessage, setReactionUpdate } = useChatStore()
+    const { socket, isConnected, connect, updateTotaluser, totalUser, reconnect } = useWebSocketConnectionStore()
+      const { data, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = useGetPublicMessage()
+    
+    const queryClient = useQueryClient()
+    const childRef = useRef<ChildRef>(null)
 
 
 
     useEffect(() => {
         if (isConnected) return
         if (user?.userId) {
-            const baseUrl = "ws://localhost:8080/ws"
-            connect(baseUrl)
+            reconnect()
         }
     }, [user, connect, isConnected])
 
@@ -44,7 +49,7 @@ export default function MainAppPage({ tokenStatus, user }: { tokenStatus: boolea
 
         const handleMessage = (event: MessageEvent) => {
             const newEvent = JSON.parse(event.data)
-            console.log("this is new event data :  : ",newEvent.type, " and this is too "  , newEvent.payload)
+            console.log("this is new event data :  : ", newEvent.type, " and this is too ", newEvent.payload)
             routeEvent(newEvent)
 
         }
@@ -57,18 +62,18 @@ export default function MainAppPage({ tokenStatus, user }: { tokenStatus: boolea
     }, [socket, addMessage])
 
 
-    function routeEvent(event: EventType  ) {
+    async function routeEvent(event: EventType) {
         if (event.type === undefined) {
             alert("no type field in the event")
         }
-        console.log("this is hte message tpye : ",event.type)
+        console.log("this is hte message tpye : ", event.type)
         switch (event.type) {
             case "public_send_message":
                 console.log("new message")
                 break;
 
             case "public_new_message":
-                let  payloadData = event.payload as NewPayloadType;
+                let payloadData = event.payload as NewPayloadType;
                 addMessage(payloadData)
                 console.log("new message ")
                 break;
@@ -77,6 +82,34 @@ export default function MainAppPage({ tokenStatus, user }: { tokenStatus: boolea
                 console.log("this is new reaction hoi payload : ", payload)
                 setReactionUpdate(payload)
                 toast.success(`reaction is this : ${payload.emoji} `)
+                break;
+            case "delete_public_message":
+                const deletePayload = event.payload as DeletePublicMessage
+                const formattedDate = new Date(deletePayload.prunedUntil).toLocaleString()
+                toast.success(`🧹 Deleted ${deletePayload.prunedCount} old messages (until ${formattedDate})`, {
+                    icon: "🧼",
+                    style: { background: "#ffe066", color: "#333" },
+                })
+                childRef.current?.triggerAction()
+                break;
+            case "new_user_join":
+                const newUserPayload = event.payload as NewUserPayloadType
+                updateTotaluser(newUserPayload.totalUser)
+                    if(user.userId == newUserPayload.userId){
+                    toast.success("You have joined successfully")
+                }else{
+                    toast.success(`${newUserPayload.userName} has joined`)
+                }
+                break;
+            case "delete_user":
+                const newDeleteUserPayload = event.payload as NewUserPayloadType
+                updateTotaluser(newDeleteUserPayload.totalUser)
+                if(user.userId == newDeleteUserPayload.userId){
+                    toast.error("You have been disconnected ")
+                }else{
+                    toast.error(`${newDeleteUserPayload.userName} has been disconnected `)
+                }
+              
                 break;
             default:
                 alert("unsupported message type ")
@@ -174,6 +207,7 @@ export default function MainAppPage({ tokenStatus, user }: { tokenStatus: boolea
                     <div className="mb-4 sm:mb-6 text-center">
                         <h2 className="text-xl sm:text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-2">
                             Welcome to the Fun Zone, {user?.userName || "Guest"}! 🎉
+                            Total User : {totalUser}
                         </h2>
                         <p className="text-sm sm:text-lg text-gray-600">
                             Where conversations come alive! Drop a message and make some friends!
@@ -182,7 +216,7 @@ export default function MainAppPage({ tokenStatus, user }: { tokenStatus: boolea
                     </div>
 
                     {/* <ChatInterface user={user} messages={messages} /> */}
-                    <ChatInterface  />
+                    <ChatInterface  ref={childRef}/>
                 </div>
             </div>
         </div>
