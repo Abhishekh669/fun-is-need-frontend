@@ -35,7 +35,6 @@ const ReplyPreview = React.memo(function ReplyPreview({
 // Memoized Character Counter Component
 const CharacterCounter = React.memo(function CharacterCounter({ messageLength }: { messageLength: number }) {
   if (messageLength <= 400) return null
-
   return (
     <div className="mt-2 text-center">
       <span
@@ -76,6 +75,7 @@ const MessageInput = forwardRef<
   const handleSendMessage = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault()
+
       if (!isConnected) {
         toast.error("Oops! Not connected to the fun zone! 🚫", {
           icon: "🔌",
@@ -83,9 +83,11 @@ const MessageInput = forwardRef<
         })
         return
       }
+
       if (!user || message.trim().length === 0 || isSending) return
 
       setIsSending(true)
+
       try {
         const payload = {
           userId: user.userId,
@@ -105,6 +107,7 @@ const MessageInput = forwardRef<
           type: "public_send_message",
           payload,
         }
+
         send(JSON.stringify(eventData))
         setMessage("")
         onCancelReply()
@@ -115,13 +118,10 @@ const MessageInput = forwardRef<
           duration: 2000,
         })
 
-        // Improved auto scroll after sending message with multiple attempts
-        const scrollAfterSend = () => {
-          setTimeout(() => onScrollToBottom(), 100)
-          setTimeout(() => onScrollToBottom(), 300)
-          setTimeout(() => onScrollToBottom(), 600)
-        }
-        scrollAfterSend()
+        // Improved auto scroll after sending message
+        setTimeout(() => {
+          onScrollToBottom()
+        }, 100)
       } catch (error) {
         toast.error("Oops! Message got lost in space! 🛸", {
           icon: "😅",
@@ -165,7 +165,7 @@ const MessageInput = forwardRef<
               ref={ref}
               value={message}
               onChange={handleInputChange}
-              onKeyPress={handleKeyPress}
+              onKeyDown={handleKeyPress}
               placeholder={replyingTo ? "Type your reply... ↩️" : "Type something awesome... ✨"}
               className="pr-4 py-3 text-sm sm:text-base rounded-2xl border-2 border-purple-200 focus:border-purple-400 bg-white/90 backdrop-blur-sm shadow-lg transition-all duration-200 focus:shadow-xl"
               maxLength={500}

@@ -222,10 +222,12 @@ const ChatMessage = React.memo(function ChatMessage({
         setShowMoreOptions(false)
       }
     }
+
     if (showEmojiPicker || showMoreOptions) {
       document.addEventListener("mousedown", handleClickOutside)
       document.addEventListener("touchstart", handleClickOutside)
     }
+
     return () => {
       document.removeEventListener("mousedown", handleClickOutside)
       document.removeEventListener("touchstart", handleClickOutside)
@@ -263,13 +265,16 @@ const ChatMessage = React.memo(function ChatMessage({
       if (existingReaction?.emoji === emoji) {
         emoji = ""
       }
+
       if (onReaction) {
         onReaction(message.id, emoji)
       }
+
       // Close all popovers after reaction
       setShowEmojiPicker(false)
       setShowMoreOptions(false)
       setShowExtendedEmojiPicker(false)
+
       if (emoji) {
         toast.success(`Reacted with ${emoji}!`, {
           icon: emoji,
@@ -310,20 +315,22 @@ const ChatMessage = React.memo(function ChatMessage({
 
   return (
     <div
-      className={`flex gap-2 sm:gap-3 mb-4 sm:mb-6 ${isCurrentUser ? "flex-row-reverse" : "flex-row"} ${
+      className={`flex gap-2 sm:gap-3 mb-3 sm:mb-4 ${isCurrentUser ? "flex-row-reverse" : "flex-row"} ${
         isVisible ? "animate-in slide-in-from-bottom-2 duration-300" : "opacity-0"
       }`}
     >
       {/* Fun Avatar */}
-      <FunAvatar name={message.userName} isCurrentUser={isCurrentUser} />
+      <div className="flex-shrink-0">
+        <FunAvatar name={message.userName} isCurrentUser={isCurrentUser} />
+      </div>
 
       {/* Message Content */}
       <div
-        className={`max-w-[75%] ${isCurrentUser ? "items-end" : "items-start"} flex flex-col relative`}
+        className={`max-w-[75%] ${isCurrentUser ? "items-end" : "items-start"} flex flex-col relative min-w-0`}
         ref={actionsRef}
       >
         {/* Username and Time */}
-        <div className={`flex items-center gap-2 mb-2 ${isCurrentUser ? "flex-row-reverse" : "flex-row"}`}>
+        <div className={`flex items-center gap-2 mb-1 ${isCurrentUser ? "flex-row-reverse" : "flex-row"}`}>
           <span
             className={`text-xs sm:text-sm font-bold ${
               isCurrentUser ? "text-orange-600" : "text-purple-600"
@@ -337,13 +344,17 @@ const ChatMessage = React.memo(function ChatMessage({
         </div>
 
         {/* Reply Preview */}
-        {message.replyTo && <ReplyPreview replyTo={message.replyTo} />}
+        {message.replyTo && (
+          <div className="w-full mb-2">
+            <ReplyPreview replyTo={message.replyTo} />
+          </div>
+        )}
 
         {/* Message Container with Actions */}
-        <div className="relative flex items-center gap-2">
+        <div className="relative flex items-start gap-2 w-full">
           {/* Left Side Actions (for current user messages) */}
           {isCurrentUser && (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 flex-shrink-0">
               {/* Emoji Reaction Button */}
               <div className="relative">
                 <Popover open={showEmojiPicker} onOpenChange={setShowEmojiPicker}>
@@ -444,18 +455,18 @@ const ChatMessage = React.memo(function ChatMessage({
 
           {/* Message Bubble */}
           <div
-            className={`px-3 sm:px-4 py-2 sm:py-3 rounded-2xl max-w-full break-words shadow-lg transition-all duration-200 ${
+            className={`px-3 sm:px-4 py-2 sm:py-3 rounded-2xl break-words shadow-lg transition-all duration-200 flex-1 min-w-0 ${
               isCurrentUser
                 ? "bg-gradient-to-r from-orange-400 to-pink-500 text-white rounded-br-md shadow-orange-200"
                 : "bg-gradient-to-r from-purple-100 to-blue-100 text-gray-800 rounded-bl-md border border-purple-200"
             }`}
           >
-            <p className="text-sm leading-relaxed">{message.message}</p>
+            <p className="text-sm leading-relaxed break-words">{message.message}</p>
           </div>
 
           {/* Right Side Actions (for other users' messages) */}
           {!isCurrentUser && (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 flex-shrink-0">
               {/* Emoji Reaction Button */}
               <div className="relative">
                 <Popover open={showEmojiPicker} onOpenChange={setShowEmojiPicker}>
@@ -556,12 +567,14 @@ const ChatMessage = React.memo(function ChatMessage({
         </div>
 
         {/* Message Reactions */}
-        <MessageReactionsWithMore
-          reactions={message.reactions || []}
-          currentUserId={currentUserId}
-          onReactionClick={handleReaction}
-          onShowMore={() => setShowReactionsDialog(true)}
-        />
+        <div className="w-full">
+          <MessageReactionsWithMore
+            reactions={message.reactions || []}
+            currentUserId={currentUserId}
+            onReactionClick={handleReaction}
+            onShowMore={() => setShowReactionsDialog(true)}
+          />
+        </div>
 
         {/* Reactions Dialog */}
         <Dialog open={showReactionsDialog} onOpenChange={setShowReactionsDialog}>

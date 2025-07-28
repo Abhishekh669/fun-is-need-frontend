@@ -102,6 +102,7 @@ export default function ChatInterface(): ReactElement {
   const [isInitialLoad, setIsInitialLoad] = useState(true)
   const [windowWidth, setWindowWidth] = useState(0)
   const [isNearBottom, setIsNearBottom] = useState(true)
+  const isLoadingMoreRef = useRef(false)
 
   const parentRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -132,12 +133,54 @@ export default function ChatInterface(): ReactElement {
     }
   }, [sortedMessages, setMessages, isLoading, isFetchingNextPage])
 
-  // Virtualizer setup for chat (messages grow from bottom)
+  // Improved dynamic size estimation based on message content
+  const estimateMessageSize = useCallback(
+    (index: number) => {
+      const message = messages[index]
+      if (!message) return 140
+
+      let baseHeight = 90 // Increased base message height
+
+      // Add height for reply (more accurate)
+      if (message.replyTo) {
+        const replyLength = message.replyTo.message?.length || 0
+        if (replyLength > 100) {
+          baseHeight += 80 // Expandable reply
+        } else {
+          baseHeight += 65
+        }
+      }
+
+      // Add height for reactions
+      if (message.reactions && message.reactions.length > 0) {
+        baseHeight += 45
+      }
+
+      // Add height based on message length (more accurate calculation)
+      const messageLength = message.message?.length || 0
+      const wordsPerLine = 40 // Average words per line
+      const extraLines = Math.ceil(messageLength / wordsPerLine)
+      baseHeight += Math.max(0, extraLines - 1) * 22 // 22px per extra line
+
+      // Add padding for actions and spacing
+      baseHeight += 25
+
+      return Math.max(baseHeight, 140) // Increased minimum height
+    },
+    [messages],
+  )
+
+  // Virtualizer setup for chat with improved dynamic sizing
   const rowVirtualizer = useVirtualizer({
     count: messages.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 120, // Estimated message height
-    overscan: 5,
+    estimateSize: estimateMessageSize,
+    overscan: 2, // Further reduced for better performance
+    measureElement: (element) => {
+      // Measure actual element height for better accuracy
+      const height = element?.getBoundingClientRect().height
+      return height ?? estimateMessageSize(0)
+    },
   })
 
   // Check if user is near bottom
@@ -145,10 +188,10 @@ export default function ChatInterface(): ReactElement {
     if (!parentRef.current) return true
     const { scrollTop, scrollHeight, clientHeight } = parentRef.current
     const distanceFromBottom = scrollHeight - (scrollTop + clientHeight)
-    return distanceFromBottom < 100
+    return distanceFromBottom < 150
   }, [])
 
-  // Scroll to bottom function
+  // Improved scroll to bottom function
   const scrollToBottom = useCallback((smooth = true) => {
     if (!parentRef.current) return
 
@@ -168,45 +211,64 @@ export default function ChatInterface(): ReactElement {
     setShowScrollToBottom(false)
   }, [])
 
-  // Handle scroll events
+  // Improved scroll handling with better position maintenance
   const handleScroll = useCallback(() => {
-    if (!parentRef.current) return
+    if (!parentRef.current || isLoadingMoreRef.current) return
 
     const { scrollTop, scrollHeight, clientHeight } = parentRef.current
     const distanceFromBottom = scrollHeight - (scrollTop + clientHeight)
 
     // Check if near bottom
-    const nearBottom = distanceFromBottom < 100
+    const nearBottom = distanceFromBottom < 150
     setIsNearBottom(nearBottom)
     setShowScrollToBottom(!nearBottom && messages.length > 0)
 
     // Check if near top for infinite scroll (load older messages)
-    const nearTop = scrollTop < 100
-    if (nearTop && hasNextPage && !isFetchingNextPage && !isLoading) {
-      const previousScrollHeight = scrollHeight
-      const previousScrollTop = scrollTop
+    const nearTop = scrollTop < 200
+    if (nearTop && hasNextPage && !isFetchingNextPage && !isLoading && !isLoadingMoreRef.current) {
+      isLoadingMoreRef.current = true
 
-      fetchNextPage().then(() => {
-        // Maintain scroll position after loading older messages
-        requestAnimationFrame(() => {
-          if (parentRef.current) {
-            const newScrollHeight = parentRef.current.scrollHeight
-            const heightDifference = newScrollHeight - previousScrollHeight
-            parentRef.current.scrollTop = previousScrollTop + heightDifference
-          }
+      // Store current scroll position more precisely
+      const currentScrollHeight = scrollHeight
+      const currentScrollTop = scrollTop
+
+      fetchNextPage()
+        .then(() => {
+          // Better scroll position maintenance
+          requestAnimationFrame(() => {
+            if (parentRef.current) {
+              const newScrollHeight = parentRef.current.scrollHeight
+              const heightDifference = newScrollHeight - currentScrollHeight
+              const newScrollTop = currentScrollTop + heightDifference
+
+              parentRef.current.scrollTop = newScrollTop
+
+              // Double-check after a short delay
+              setTimeout(() => {
+                if (parentRef.current && Math.abs(parentRef.current.scrollTop - newScrollTop) > 10) {
+                  parentRef.current.scrollTop = newScrollTop
+                }
+                isLoadingMoreRef.current = false
+              }, 100)
+            } else {
+              isLoadingMoreRef.current = false
+            }
+          })
         })
-      })
+        .catch(() => {
+          isLoadingMoreRef.current = false
+        })
     }
   }, [messages.length, hasNextPage, isFetchingNextPage, isLoading, fetchNextPage])
 
-  // Throttled scroll handler
+  // Throttled scroll handler with better performance
   useEffect(() => {
     const scrollElement = parentRef.current
     if (!scrollElement) return
 
     const throttledScroll = () => {
       if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current)
-      scrollTimeoutRef.current = setTimeout(handleScroll, 50)
+      scrollTimeoutRef.current = setTimeout(handleScroll, 16) // 60fps
     }
 
     scrollElement.addEventListener("scroll", throttledScroll, { passive: true })
@@ -220,7 +282,10 @@ export default function ChatInterface(): ReactElement {
   useEffect(() => {
     if (isInitialLoad && messages.length > 0 && !isLoading) {
       setIsInitialLoad(false)
-      setTimeout(() => scrollToBottom(false), 100)
+      // Wait for virtual items to render
+      setTimeout(() => {
+        scrollToBottom(false)
+      }, 300) // Increased delay for better reliability
     }
   }, [messages.length, isInitialLoad, isLoading, scrollToBottom])
 
@@ -229,8 +294,9 @@ export default function ChatInterface(): ReactElement {
     const currentMessageCount = messages.length
     const previousMessageCount = lastMessageCountRef.current
 
-    if (currentMessageCount > previousMessageCount && isNearBottom) {
-      setTimeout(() => scrollToBottom(true), 50)
+    if (currentMessageCount > previousMessageCount && isNearBottom && !isLoadingMoreRef.current) {
+      // Wait for virtual items to update
+      setTimeout(() => scrollToBottom(true), 150)
     }
 
     lastMessageCountRef.current = currentMessageCount
@@ -253,7 +319,7 @@ export default function ChatInterface(): ReactElement {
             // Auto-scroll for user's own messages or if near bottom
             const isUserMessage = newMessage.userId === user?.userId
             if (isUserMessage || isNearBottom) {
-              setTimeout(() => scrollToBottom(true), 100)
+              setTimeout(() => scrollToBottom(true), 200)
             }
             break
 
@@ -339,7 +405,7 @@ export default function ChatInterface(): ReactElement {
           ref={parentRef}
           className="h-full overflow-y-auto overscroll-behavior-y-contain"
           style={{
-            scrollBehavior: "smooth",
+            scrollBehavior: "auto",
             WebkitOverflowScrolling: "touch",
           }}
         >
@@ -358,15 +424,16 @@ export default function ChatInterface(): ReactElement {
                 return (
                   <div
                     key={message.id}
+                    data-index={virtualRow.index}
+                    ref={rowVirtualizer.measureElement}
                     style={{
                       position: "absolute",
                       top: 0,
                       left: 0,
                       width: "100%",
-                      height: `${virtualRow.size}px`,
                       transform: `translateY(${virtualRow.start}px)`,
                     }}
-                    className="px-3 py-2"
+                    className="px-3 py-1" // Reduced padding to prevent overlapping
                   >
                     {user && (
                       <ChatMessage
