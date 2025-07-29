@@ -5,6 +5,7 @@ import axios from "axios"
 export const fetchPublicMessages = async(limit : number, pageParam : number = 0) =>{
     const res = await axios.get(`/api/get/messages/public?page=${limit}&perPage=${pageParam}`)
     const data = res.data.data;
+    console.log("this is the data of public message in tanstack : ", data)
     return data;
 }
 

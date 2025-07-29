@@ -151,7 +151,7 @@ const ReactionsList = React.memo(function ReactionsList({
 })
 
 // Extended Emoji Picker Dialog
-const ExtendedEmojiPicker = React.memo(function ExtendedEmojiPicker({
+export const ExtendedEmojiPicker = React.memo(function ExtendedEmojiPicker({
   open,
   onOpenChange,
   onEmojiSelect,

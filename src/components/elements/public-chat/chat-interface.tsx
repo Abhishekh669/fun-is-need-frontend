@@ -1,3 +1,4 @@
+
 "use client"
 import type { ReactElement } from "react"
 import React, { useRef, useState, useEffect, useMemo, useCallback, forwardRef, useImperativeHandle } from "react"
@@ -11,7 +12,7 @@ import MessageInput from "./message-input"
 import { fetchPublicMessages, useGetPublicMessage } from "@/lib/hooks/tanstack-query/query-hook/messages/use-get-message"
 import { useChatStore } from "@/lib/store/use-chat-store"
 import { useVirtualizer } from "@tanstack/react-virtual"
-import { useQueryClient } from "@tanstack/react-query"
+import IsTypingIndicator from "./is-typing-indicator"
 
 // Memoized Chat Header Component
 const ChatHeader = React.memo(function ChatHeader({
@@ -111,10 +112,9 @@ const  ChatInterface = forwardRef<ChildRef>((props, ref) => {
   const isLoadingMoreRef = useRef(false)
 
   const parentRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
   const scrollTimeoutRef = useRef<NodeJS.Timeout>(null)
   const lastMessageCountRef = useRef(0)
-  const queryClient = useQueryClient();
 
   // Track window width for responsive behavior
   useEffect(() => {
@@ -488,7 +488,7 @@ const  ChatInterface = forwardRef<ChildRef>((props, ref) => {
           </div>
         )}
       </div>
-
+ <IsTypingIndicator />
       <div className="flex-shrink-0">
         <MessageInput
           ref={inputRef}

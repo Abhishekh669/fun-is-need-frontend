@@ -4,7 +4,8 @@ import { NewPayloadType, ReactionSendPayloadType } from "../utils/types/chat/typ
 
 type ChatStore = {
   messages: NewPayloadType[];
-  loadMessages : () => void;
+  isTyping : boolean,
+  setIsTyping : (state : boolean) => void,
   addMessage: (msg: NewPayloadType) => void;
   clearMessages: () => void;
   setMessages: (msgs: NewPayloadType[]) => void;
@@ -13,9 +14,8 @@ type ChatStore = {
 
 export const useChatStore = create<ChatStore>((set, get) => ({
   messages: [],
-  loadMessages : () =>{
-      
-  },
+  isTyping : false,
+  setIsTyping : (state) => set({isTyping : state}),
   addMessage: (msg) =>
     set((state) => ({
       messages: [...state.messages, msg],

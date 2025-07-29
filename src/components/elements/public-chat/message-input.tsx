@@ -1,12 +1,22 @@
 "use client"
-import React, { useState, useCallback, forwardRef } from "react"
+import React, { useState, useCallback, forwardRef, useRef, useEffect } from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Send, Reply, X } from "lucide-react"
+import { Send, Reply, X, Smile } from "lucide-react"
 import { useWebSocketConnectionStore } from "@/lib/store/use-web-socket-store"
 import toast from "react-hot-toast"
 import type { UserType } from "@/lib/store/user-store"
 import type { EventType, MessageReplyType } from "@/lib/utils/types/chat/types"
+import { useChatStore } from "@/lib/store/use-chat-store"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { emojiCategories } from "@/lib/utils/emoji"
+import { ExtendedEmojiPicker } from "./chat-message"
+import { Textarea } from "@/components/ui/textarea"
 
 // Memoized Reply Preview Component
 const ReplyPreview = React.memo(function ReplyPreview({
@@ -38,9 +48,8 @@ const CharacterCounter = React.memo(function CharacterCounter({ messageLength }:
   return (
     <div className="mt-2 text-center">
       <span
-        className={`text-xs px-2 py-1 sm:px-3 sm:py-1 rounded-full transition-colors ${
-          messageLength > 450 ? "bg-red-100 text-red-600" : "bg-yellow-100 text-yellow-600"
-        }`}
+        className={`text-xs px-2 py-1 sm:px-3 sm:py-1 rounded-full transition-colors ${messageLength > 450 ? "bg-red-100 text-red-600" : "bg-yellow-100 text-yellow-600"
+          }`}
       >
         {500 - messageLength} characters left!
         {messageLength > 450 ? " 🔥" : " ✍️"}
@@ -49,8 +58,10 @@ const CharacterCounter = React.memo(function CharacterCounter({ messageLength }:
   )
 })
 
+
+
 const MessageInput = forwardRef<
-  HTMLInputElement,
+  HTMLTextAreaElement,
   {
     user: UserType | undefined
     isConnected: boolean
@@ -58,20 +69,99 @@ const MessageInput = forwardRef<
     onCancelReply: () => void
     onScrollToBottom: () => void
   }
->(function MessageInput({ user, isConnected, replyingTo, onCancelReply, onScrollToBottom }, ref) {
+>(function MessageInput({ user, isConnected, replyingTo, onCancelReply, onScrollToBottom }, forwardedRef) {
   const [message, setMessage] = useState("")
   const [isSending, setIsSending] = useState(false)
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+
   const { send } = useWebSocketConnectionStore()
+  const {isTyping} = useChatStore();
+
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const lastTypingSent = useRef<number>(0)
+
+  
+    const internalTextareaRef = useRef<HTMLTextAreaElement>(null)
+
+ useEffect(() => {
+    if (!forwardedRef) return
+    
+    if (typeof forwardedRef === "function") {
+      forwardedRef(internalTextareaRef.current)
+    } else {
+      forwardedRef.current = internalTextareaRef.current
+    }
+  }, [forwardedRef])
+
+  // Auto-resize textarea based on content
+  useEffect(() => {
+    if (internalTextareaRef.current) {
+      internalTextareaRef.current.style.height = "auto"
+      internalTextareaRef.current.style.height = `${Math.min(
+        internalTextareaRef.current.scrollHeight,
+        200 // max height
+      )}px`
+    }
+  }, [message])
 
   // Focus input when replying
-  React.useEffect(() => {
-    if (replyingTo && ref && "current" in ref) {
+  useEffect(() => {
+    if (replyingTo && internalTextareaRef.current) {
       setTimeout(() => {
-        ref.current?.focus()
+        internalTextareaRef.current?.focus()
       }, 100)
     }
-  }, [replyingTo, ref])
+  }, [replyingTo])
 
+  const handleIsTyping = useCallback(async () => {
+    if (!isConnected) {
+      toast.error("Oops! Not connected to the fun zone! 🚫", {
+        icon: "🔌",
+        style: { background: "#ff6b6b", color: "white" },
+      });
+      return;
+    }
+
+    const now = Date.now();
+
+    if (now - lastTypingSent.current > 2000) {
+      try {
+        const event: EventType = {
+          type: "is_typing",
+          payload: { isTyping: true },
+        };
+        send(JSON.stringify(event));
+        
+      } catch (error) {
+        console.error("Failed to send typing indicator", error);
+      }
+    }
+
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+
+    typingTimeoutRef.current = setTimeout(() => {
+      try {
+        const stopTypingEvent: EventType = {
+          type: "is_typing",
+          payload: { isTyping: false },
+        };
+        send(JSON.stringify(stopTypingEvent));
+      } catch (error) {
+        console.error("Failed to send stop typing indicator", error);
+      }
+    }, 3000);
+  }, [isConnected, send]);
+
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setMessage(e.target.value)
+    handleIsTyping()
+  }, [handleIsTyping, setMessage])
+
+  const handleEmojiSelect = useCallback((emoji: string) => {
+    setMessage(prev => prev + emoji)
+    setShowEmojiPicker(false)
+    internalTextareaRef.current?.focus()
+  }, [])
   const handleSendMessage = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault()
@@ -95,11 +185,11 @@ const MessageInput = forwardRef<
           message: message.trim(),
           replyTo: replyingTo
             ? {
-                messageId: replyingTo.messageId,
-                message: replyingTo.message,
-                senderName: replyingTo.senderName,
-                senderId: replyingTo.senderId,
-              }
+              messageId: replyingTo.messageId,
+              message: replyingTo.message,
+              senderName: replyingTo.senderName,
+              senderId: replyingTo.senderId,
+            }
             : undefined,
         }
 
@@ -111,6 +201,7 @@ const MessageInput = forwardRef<
         send(JSON.stringify(eventData))
         setMessage("")
         onCancelReply()
+        setShowEmojiPicker(false)
 
         toast.success("Message sent! 🚀", {
           icon: "🎉",
@@ -135,12 +226,8 @@ const MessageInput = forwardRef<
     [isConnected, user, message, replyingTo, send, onCancelReply, onScrollToBottom, isSending],
   )
 
-  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setMessage(e.target.value)
-  }, [])
-
   const handleKeyPress = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>) => {
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault()
         handleSendMessage(e as any)
@@ -161,16 +248,27 @@ const MessageInput = forwardRef<
       >
         <div className="flex gap-2 sm:gap-3 items-end">
           <div className="flex-1 relative">
-            <Input
-              ref={ref}
+            <div className="relative">
+              <Textarea
+              ref={internalTextareaRef}
               value={message}
               onChange={handleInputChange}
               onKeyDown={handleKeyPress}
               placeholder={replyingTo ? "Type your reply... ↩️" : "Type something awesome... ✨"}
-              className="pr-4 py-3 text-sm sm:text-base rounded-2xl border-2 border-purple-200 focus:border-purple-400 bg-white/90 backdrop-blur-sm shadow-lg transition-all duration-200 focus:shadow-xl"
+              className="min-h-[48px] max-h-[200px] pr-12 py-3 text-sm sm:text-base rounded-2xl border-2 border-purple-200 focus:border-purple-400 bg-white/90 backdrop-blur-sm shadow-lg transition-all duration-200 focus:shadow-xl resize-none"
               maxLength={500}
               disabled={!isConnected || !user || isSending}
+              rows={1}
             />
+              <button
+                type="button"
+                onClick={() => setShowEmojiPicker(true)}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-purple-500 transition-colors"
+                disabled={!isConnected || !user}
+              >
+                <Smile className="w-5 h-5" />
+              </button>
+            </div>
           </div>
           <Button
             type="submit"
@@ -187,6 +285,13 @@ const MessageInput = forwardRef<
 
         {/* Character counter */}
         <CharacterCounter messageLength={message.length} />
+
+        {/* Extended Emoji Picker Dialog */}
+        <ExtendedEmojiPicker
+          open={showEmojiPicker}
+          onOpenChange={setShowEmojiPicker}
+          onEmojiSelect={handleEmojiSelect}
+        />
       </form>
     </>
   )

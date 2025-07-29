@@ -13,26 +13,26 @@ import toast from "react-hot-toast"
 import { Button } from "@/components/ui/button"
 import ChatInterface, { ChildRef } from "./chat-interface"
 import UsernameModal from "./user-name-model"
-import { DeletePublicMessage, EventType,   NewPayloadType, NewUserPayloadType, ReactionSendPayloadType } from "@/lib/utils/types/chat/types"
-import { useQueryClient } from "@tanstack/react-query"
-import { fetchPublicMessages, useGetPublicMessage } from "@/lib/hooks/tanstack-query/query-hook/messages/use-get-message"
+import { DeletePublicMessage, EventType, IsTypingPayload, NewPayloadType, NewUserPayloadType, ReactionSendPayloadType } from "@/lib/utils/types/chat/types"
 
 
 
 
 export default function MainAppPage({ tokenStatus, user }: { tokenStatus: boolean; user: UserType }) {
+
+
+    const { user: UserStore } = useUserStore();
     const [inputValue, setInputValue] = useState("")
     const [userName, setUserName] = useState("")
-    const { data: userData } = useGetCheckUserName(userName)
-    const { mutate: create_temp_user, isPending } = useCreateTempUser()
-    const isUsernameValid = userData?.success && userData?.state
     const [open, setOpen] = useState(tokenStatus)
     const { setUser } = useUserStore()
-    const { addMessage, setReactionUpdate } = useChatStore()
+
+    const { addMessage, setReactionUpdate, setIsTyping } = useChatStore()
+    const { data: userData } = useGetCheckUserName(userName)
     const { socket, isConnected, connect, updateTotaluser, totalUser, reconnect } = useWebSocketConnectionStore()
-      const { data, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = useGetPublicMessage()
-    
-    const queryClient = useQueryClient()
+    const { mutate: create_temp_user, isPending } = useCreateTempUser()
+
+    const isUsernameValid = userData?.success && userData?.state
     const childRef = useRef<ChildRef>(null)
 
 
@@ -44,6 +44,8 @@ export default function MainAppPage({ tokenStatus, user }: { tokenStatus: boolea
         }
     }, [user, connect, isConnected])
 
+
+
     useEffect(() => {
         if (!socket) return
 
@@ -51,7 +53,6 @@ export default function MainAppPage({ tokenStatus, user }: { tokenStatus: boolea
             const newEvent = JSON.parse(event.data)
             console.log("this is new event data :  : ", newEvent.type, " and this is too ", newEvent.payload)
             routeEvent(newEvent)
-
         }
 
         socket.onmessage = handleMessage
@@ -60,9 +61,9 @@ export default function MainAppPage({ tokenStatus, user }: { tokenStatus: boolea
             socket.removeEventListener("message", handleMessage)
         }
     }, [socket, addMessage])
+    console.log("for private  ;", user)
 
-
-    async function routeEvent(event: EventType) {
+    function routeEvent(event: EventType) {
         if (event.type === undefined) {
             alert("no type field in the event")
         }
@@ -95,21 +96,26 @@ export default function MainAppPage({ tokenStatus, user }: { tokenStatus: boolea
             case "new_user_join":
                 const newUserPayload = event.payload as NewUserPayloadType
                 updateTotaluser(newUserPayload.totalUser)
-                    if(user.userId == newUserPayload.userId){
+                setUser({ userId: newUserPayload.userId, userName: newUserPayload.userName })
+                if (UserStore?.userId === newUserPayload.userId) {
                     toast.success("You have joined successfully")
-                }else{
+                } else {
                     toast.success(`${newUserPayload.userName} has joined`)
                 }
                 break;
             case "delete_user":
                 const newDeleteUserPayload = event.payload as NewUserPayloadType
                 updateTotaluser(newDeleteUserPayload.totalUser)
-                if(user.userId == newDeleteUserPayload.userId){
+                console.log("in private : ", user)
+                if (user?.userId == newDeleteUserPayload.userId) {
                     toast.error("You have been disconnected ")
-                }else{
+                } else {
                     toast.error(`${newDeleteUserPayload.userName} has been disconnected `)
                 }
-              
+                break;
+            case "is_typing":
+                const isTypingPayload = event.payload as IsTypingPayload
+                setIsTyping(isTypingPayload.isTyping)
                 break;
             default:
                 alert("unsupported message type ")
@@ -216,7 +222,7 @@ export default function MainAppPage({ tokenStatus, user }: { tokenStatus: boolea
                     </div>
 
                     {/* <ChatInterface user={user} messages={messages} /> */}
-                    <ChatInterface  ref={childRef}/>
+                    <ChatInterface ref={childRef} />
                 </div>
             </div>
         </div>

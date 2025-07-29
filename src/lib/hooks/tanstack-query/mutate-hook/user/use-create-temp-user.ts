@@ -5,9 +5,9 @@ export const useCreateTempUser = () => {
   return useMutation({
     mutationFn: createTempUser,
     onSuccess: (res) => {
-        // if(res.success && res.message){
-        //     queryClient.invalidateQueries({ queryKey: ["hello"] })
-        // } 
+        if(res.success && res.message){
+            queryClient.invalidateQueries({ queryKey: ["check-user-from-token"] })
+        } 
     },
     onError: () => { },
     onSettled: () => { },

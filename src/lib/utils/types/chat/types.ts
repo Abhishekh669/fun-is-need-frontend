@@ -1,7 +1,11 @@
 
 export type EventType = {
-    type: "public_send_message" | "private_send_message" | "public_new_message" | "new_user_join" | "public_reply_message" | "public_reaction" | 'delete_public_message' | "delete_user"
-    payload: NewUserPayloadType | PayloadType | ReactionSendPayloadType | NewPayloadType | DeletePublicMessage
+    type: "is_typing" |  "public_send_message" | "private_send_message" | "public_new_message" | "new_user_join" | "public_reply_message" | "public_reaction" | 'delete_public_message' | "delete_user"
+    payload:IsTypingPayload |  NewUserPayloadType | PayloadType | ReactionSendPayloadType | NewPayloadType | DeletePublicMessage
+}
+
+export type IsTypingPayload = {
+        isTyping : boolean
 }
 
 export type ReactionSendPayloadType = {
