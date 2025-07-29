@@ -293,29 +293,59 @@ const  ChatInterface = forwardRef<ChildRef>((props, ref) => {
   }, [handleScroll])
 
   // Auto-scroll on initial load
-  useEffect(() => {
+   useEffect(() => {
     if (isInitialLoad && messages.length > 0 && !isLoading) {
-      setIsInitialLoad(false)
-      // Wait for virtual items to render
-      setTimeout(() => {
-        scrollToBottom(false)
-      }, 300) // Increased delay for better reliability
+      setIsInitialLoad(false);
+      
+      // Wait for both virtual items to render and layout to stabilize
+      const attemptScroll = (attempts = 0) => {
+        if (attempts >= 5) return; // Max 5 attempts
+        
+        // Check if we have virtual items rendered
+        if (virtualItems.length > 0 && parentRef.current) {
+          // Calculate if we're already at bottom (don't scroll if we are)
+          const { scrollTop, scrollHeight, clientHeight } = parentRef.current;
+          const distanceFromBottom = scrollHeight - (scrollTop + clientHeight);
+          
+          // Only scroll if we're not already near bottom
+          if (distanceFromBottom > 100) {
+            scrollToBottom(false);
+          }
+        } else {
+          // Try again after a short delay
+          setTimeout(() => attemptScroll(attempts + 1), 100 * (attempts + 1));
+        }
+      };
+      
+      // Start the attempt
+      attemptScroll();
     }
-  }, [messages.length, isInitialLoad, isLoading, scrollToBottom])
+  }, [messages.length, isInitialLoad, isLoading, scrollToBottom]);
 
-  // Auto-scroll when new messages arrive (only if user is near bottom)
+  // Improved new message handling
   useEffect(() => {
-    const currentMessageCount = messages.length
-    const previousMessageCount = lastMessageCountRef.current
+    const currentMessageCount = messages.length;
+    const previousMessageCount = lastMessageCountRef.current;
 
-    if (currentMessageCount > previousMessageCount && isNearBottom && !isLoadingMoreRef.current) {
-      // Wait for virtual items to update
-      setTimeout(() => scrollToBottom(true), 150)
+    if (currentMessageCount > previousMessageCount) {
+      // Only auto-scroll if:
+      // 1. We're near the bottom OR
+      // 2. The new message is from the current user
+      const shouldScroll = isNearBottom || 
+                         (currentMessageCount > 0 && 
+                          user && 
+                          messages[currentMessageCount - 1]?.userId === user.userId);
+
+      if (shouldScroll && !isLoadingMoreRef.current) {
+        // Use a small delay to ensure the message is rendered
+        setTimeout(() => {
+          scrollToBottom(true);
+        }, 50);
+      }
     }
 
-    lastMessageCountRef.current = currentMessageCount
-  }, [messages.length, isNearBottom, scrollToBottom])
-
+    lastMessageCountRef.current = currentMessageCount;
+  }, [messages.length, isNearBottom, scrollToBottom, user]);
   // Handle WebSocket messages
  
 
