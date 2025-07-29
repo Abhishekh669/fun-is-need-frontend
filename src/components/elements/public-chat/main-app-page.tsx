@@ -96,7 +96,6 @@ export default function MainAppPage({ tokenStatus, user }: { tokenStatus: boolea
             case "new_user_join":
                 const newUserPayload = event.payload as NewUserPayloadType
                 updateTotaluser(newUserPayload.totalUser)
-                setUser({ userId: newUserPayload.userId, userName: newUserPayload.userName })
                 if (UserStore?.userId === newUserPayload.userId) {
                     toast.success("You have joined successfully")
                 } else {
@@ -115,6 +114,7 @@ export default function MainAppPage({ tokenStatus, user }: { tokenStatus: boolea
                 break;
             case "is_typing":
                 const isTypingPayload = event.payload as IsTypingPayload
+                console.log(isTypingPayload)
                 setIsTyping(isTypingPayload.isTyping)
                 break;
             default:

@@ -317,51 +317,7 @@ const  ChatInterface = forwardRef<ChildRef>((props, ref) => {
   }, [messages.length, isNearBottom, scrollToBottom])
 
   // Handle WebSocket messages
-  useEffect(() => {
-    if (!socket) return
-
-    const handleMessage = (event: MessageEvent) => {
-      try {
-        const newEvent = JSON.parse(event.data)
-        console.log("WebSocket event received:", newEvent.type, newEvent.payload)
-
-        switch (newEvent.type) {
-          case "public_new_message":
-            const newMessage = newEvent.payload as NewPayloadType
-            addMessage(newMessage)
-
-            // Auto-scroll for user's own messages or if near bottom
-            const isUserMessage = newMessage.userId === user?.userId
-            if (isUserMessage || isNearBottom) {
-              setTimeout(() => scrollToBottom(true), 200)
-            }
-            break
-
-          case "public_reaction":
-            const reactionPayload = newEvent.payload as ReactionSendPayloadType
-            setReactionUpdate(reactionPayload)
-            toast.success(`Reaction: ${reactionPayload.emoji}`, {
-              icon: reactionPayload.emoji,
-              duration: 1500,
-            })
-            break
-
-          default:
-            console.log("Unknown WebSocket event type:", newEvent.type)
-            break
-        }
-      } catch (error) {
-        console.error("Error parsing WebSocket message:", error)
-      }
-    }
-
-    socket.onmessage = handleMessage
-    return () => {
-      if (socket.onmessage === handleMessage) {
-        socket.onmessage = null
-      }
-    }
-  }, [socket, addMessage, setReactionUpdate, user?.userId, isNearBottom, scrollToBottom])
+ 
 
   // Memoize unique user count
   const uniqueUserCount = useMemo(() => {
