@@ -95,6 +95,7 @@ export default function MainAppPage({ tokenStatus, user }: { tokenStatus: boolea
                 break;
             case "new_user_join":
                 const newUserPayload = event.payload as NewUserPayloadType
+                console.log("this is  the new user apyload : ",newUserPayload)
                 updateTotaluser(newUserPayload.totalUser)
                 if (UserStore?.userId === newUserPayload.userId) {
                     toast.success("You have joined successfully")

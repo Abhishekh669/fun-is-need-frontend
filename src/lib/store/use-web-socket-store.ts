@@ -137,7 +137,7 @@ export const useWebSocketConnectionStore = create<WebSocketConnectionStore>()(
       const { lastUrl } = get();
       if (lastUrl) {
         reconnectAttempts = 0;
-        get().connect(lastUrl);
+        get().connect(process.env.NEXT_PUBLIC_WEB_SOCKET!);
       } else {
         console.warn("[WebSocket] No URL to reconnect to");
       }
