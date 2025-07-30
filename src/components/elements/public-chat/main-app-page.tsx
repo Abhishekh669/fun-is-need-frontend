@@ -27,7 +27,7 @@ export default function MainAppPage({ tokenStatus, user }: { tokenStatus: boolea
     const [open, setOpen] = useState(tokenStatus)
     const { setUser } = useUserStore()
 
-    const { addMessage, setReactionUpdate, setIsTyping, isTyping } = useChatStore()
+    const { addMessage, setReactionUpdate, setIsTyping } = useChatStore()
     const { data: userData } = useGetCheckUserName(userName)
     const { socket, isConnected, connect, updateTotaluser, totalUser, reconnect } = useWebSocketConnectionStore()
     const { mutate: create_temp_user, isPending } = useCreateTempUser()
@@ -163,7 +163,7 @@ export default function MainAppPage({ tokenStatus, user }: { tokenStatus: boolea
 
         const timeoutId = setTimeout(() => {
             setUserName(inputValue.trim())
-        }, 500)
+        }, 1000)
 
         return () => clearTimeout(timeoutId)
     }, [inputValue])

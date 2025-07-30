@@ -5,6 +5,19 @@ export type UserType = {
   userName: string;
 };
 
+export type PrivateUserType = {
+  userId : string;
+  userName : string;
+  userEmail : string;
+  isAuthenticated  : boolean
+}
+
+type PrivateUserStore = {
+  privateUser  : PrivateUserType | undefined;
+  resetPrivateUser : () => void;
+  setPrivateUser : (user : PrivateUserType) => void
+}
+
 type UserStore = {
   user: UserType | undefined;
   resetUser: () => void;
@@ -16,3 +29,11 @@ export const useUserStore = create<UserStore>((set, get) => ({
   setUser: (u: UserType | undefined) => set({ user: u }),
   resetUser: () => set({ user: undefined }),
 }));
+
+
+
+export const usePrivateUserStore = create<PrivateUserStore>((set, get)=>({
+  privateUser : undefined, 
+  setPrivateUser : (u ) => set({privateUser : u}),
+  resetPrivateUser : ()=> set({privateUser : undefined}) 
+}))
