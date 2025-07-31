@@ -4,6 +4,12 @@ export type EventType = {
     payload:IsTypingPayload |  NewUserPayloadType | PayloadType | ReactionSendPayloadType | NewPayloadType | DeletePublicMessage
 }
 
+export type PrivateEventTpye = {
+    type : "private_send_message",
+    payload : PrivateMessagePayload
+}
+
+
 export type IsTypingPayload = {
         isTyping : boolean
 }
@@ -63,6 +69,33 @@ export type NewPayloadType = {
     reactions: ReactionType[]
     replyTo: MessageReplyType | undefined
 }
+
+
+export type PrivateMessageType = {
+    id : string
+    senderId : string
+    receiverId : string
+    message : string
+    imageUrl : string,
+    conversationId : string,
+    updatedAt : string,
+    createdAt : string,
+    reactions : ReactionType[],
+    replyTo : MessageReplyType,
+    seenByUserIds : string[]
+}
+
+
+export type PrivateMessagePayload = {
+    senderId : string;
+    receiverId : string;
+    message : string;
+    conversationId : string,
+    imageUrl : string,
+    replyTo : MessageReplyType
+}
+
+
 
 
 

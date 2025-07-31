@@ -14,8 +14,8 @@ import toast from "react-hot-toast"
 export default function OnboardingPageCompo({ session }: { session: Session }) {
     const router = useRouter()
     const [creating, setCreating] = useState(false)
-    console.log("trhis is the sesison : ", session)
-    if (!session || !session.user) {
+    
+    if (!session || !session.user || !session.user?.googleId) {
         return redirect("/login")
     }
     const { email, image } = session.user
@@ -28,7 +28,8 @@ export default function OnboardingPageCompo({ session }: { session: Session }) {
             userName: name,
             userId: session.user.id!,
             email: session.user.email!,
-            image: session.user.image || ""
+            image: session.user.image || "",
+            googleId : session.user.googleId!,
         }
         setCreating(true)
         try {

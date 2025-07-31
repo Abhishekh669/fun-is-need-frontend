@@ -10,6 +10,7 @@ export interface NewUserType{
     userId : string,
     email : string,
     image : string,
+    googleId : string
 }
 
 export const createNewUser = async (userData : NewUserType) => {

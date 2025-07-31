@@ -10,6 +10,7 @@ export type PrivateUserType = {
   userName : string;
   userEmail : string;
   isAuthenticated  : boolean
+  googleId : string
 }
 
 type PrivateUserStore = {

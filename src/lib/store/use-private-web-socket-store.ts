@@ -35,12 +35,14 @@ export const usePrivateWebSocketStore = create<PrivateWebSocketConnectionStore>(
     connect: (url: string) => {
       const current = get();
       const user = usePrivateUserStore.getState().privateUser;
+      console.log("this ish tprivate user : ",user)
       if (!user) {
         console.warn("[PrivateWebSocket] No private user available, cannot connect");
         return;
       }
 
-      url = url + `?userId=${user.userId}&userName=${user.userName}`;
+      url = url + `?userId=${user.googleId}&userName=${user.userName}`;
+      console.log("thisi s private userl : ",url)
 
       if (globalSocket && current.lastUrl === url) {
         if (globalSocket.readyState === WebSocket.OPEN) {

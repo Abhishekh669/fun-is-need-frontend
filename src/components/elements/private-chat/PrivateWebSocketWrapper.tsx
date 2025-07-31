@@ -2,12 +2,15 @@
 'use client';
 
 import { usePrivateWebSocketStore } from "@/lib/store/use-private-web-socket-store";
+import { usePrivateUserStore } from "@/lib/store/user-store";
 import React, { useEffect } from "react";
 import toast from "react-hot-toast";
 
 function PrivateWebSocketWrapper({ children }: { children: React.ReactNode }) {
   const webSocketUrl = process.env.NEXT_PUBLIC_PRIVATE_WEB_SOCKET;
-  const connect = usePrivateWebSocketStore((state) => state.connect);
+  const {isConnected, connect} = usePrivateWebSocketStore();
+  const {privateUser} = usePrivateUserStore();
+  console.log("i am in private weobsocket wrapper: ", webSocketUrl)
 
   useEffect(() => {
     if (!webSocketUrl) {
@@ -16,7 +19,10 @@ function PrivateWebSocketWrapper({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    if(!privateUser)return;
+
     const currentState = usePrivateWebSocketStore.getState();
+    console.log("this is hte current state in private socket wrapper : ",currentState)
     if (!currentState.isConnected && !currentState.isConnecting) {
       connect(webSocketUrl);
     }
@@ -35,7 +41,9 @@ function PrivateWebSocketWrapper({ children }: { children: React.ReactNode }) {
     return () => {
       unsubscribe();
     };
-  }, [webSocketUrl]);
+  }, [webSocketUrl, privateUser]);
+
+  console.log("private socket status : ",isConnected)
 
   if (!webSocketUrl) {
     return (

@@ -1,6 +1,5 @@
 "use client"
 import React, { useState, useCallback, forwardRef, useRef, useEffect } from "react"
-import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Send, Reply, X, Smile } from "lucide-react"
 import { useWebSocketConnectionStore } from "@/lib/store/use-web-socket-store"
@@ -8,13 +7,6 @@ import toast from "react-hot-toast"
 import type { UserType } from "@/lib/store/user-store"
 import type { EventType, MessageReplyType } from "@/lib/utils/types/chat/types"
 import { useChatStore } from "@/lib/store/use-chat-store"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { emojiCategories } from "@/lib/utils/emoji"
 import { ExtendedEmojiPicker } from "./chat-message"
 import { Textarea } from "@/components/ui/textarea"
 
@@ -75,7 +67,6 @@ const MessageInput = forwardRef<
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
 
   const { send } = useWebSocketConnectionStore()
-  const {isTyping} = useChatStore();
 
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const lastTypingSent = useRef<number>(0)
@@ -149,7 +140,7 @@ const MessageInput = forwardRef<
       } catch (error) {
         console.error("Failed to send stop typing indicator", error);
       }
-    }, 3000);
+    }, 2000);
   }, [isConnected, send]);
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {

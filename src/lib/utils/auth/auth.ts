@@ -50,7 +50,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     //   if (user && account) {
     //     const userModel = await getUserModel();
     //     const existingUser = await userModel.findOne({ email: user.email });
-        
+
     //     if (existingUser) {
     //       token.id = existingUser._id?.toString();
     //       token.userId = existingUser.userId;
@@ -60,7 +60,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     //       token.userName = existingUser.userName;
     //     }
     //   }
-      
+
     //   return token;
     // },
     // async session({session, token}){
@@ -75,34 +75,36 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     //   return session;
     // },
 
-    async jwt({token, user, profile, account}){
-      if(user && account && profile){
+    async jwt({ token, user, profile, account }) {
+      if (user && account && profile) {
         const userData = await CheckUserFromToken();
-        console.log("this ish the use rdata in session : ",userData, "origina dooglg data : ",user)
-        if(userData.success){
-            token.id = userData.user.userId
-            token.name = userData.user.userName
-        }else{
-            token.id = ""
-            token.name = user.name;
+        console.log("this ish the use rdata in session : ", userData, "origina dooglg data : ", user)
+        if (userData.success) {
+          token.id = userData.user.userId
+          token.name = userData.user.userName
+        } else {
+          token.id = ""
+          token.name = user.name;
         }
+        token.googleId = profile.sub as string
         token.email = user.email;
       }
       return token;
-    } ,
-    async session({session, token}){
-      if(token.id && session.user){
+    },
+    async session({ session, token }) {
+      if (token.id && session.user) {
         session.user.id = token.id as string;
         session.user.name = token.name as string;
         session.user.email = token.email as string;
+        session.user.googleId = token.googleId as string
       }
       return session;
-    } 
-   
+    }
+
   },
-  pages : {
-    signIn : "/login",
-    error : "/api/auth/error",
+  pages: {
+    signIn: "/login",
+    error: "/api/auth/error",
   }
 
 })

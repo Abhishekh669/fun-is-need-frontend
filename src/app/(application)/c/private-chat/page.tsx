@@ -1,17 +1,19 @@
-"use client"
-import { usePrivateWebSocketStore } from '@/lib/store/use-private-web-socket-store';
-import { usePrivateUserStore } from '@/lib/store/user-store'
+import PrivateMainAppPage from '@/components/elements/private-chat/private-main-app-page';
+import PrivateWebSocketWrapper from '@/components/elements/private-chat/PrivateWebSocketWrapper';
+import { CheckUserFromTokenForPrivate } from '@/lib/actions/user/get/check-token-for-private'
+import { signOut } from '@/lib/utils/auth/auth';
+import { redirect } from 'next/navigation';
 import React from 'react'
-function page() {
-
-  const {privateUser} = usePrivateUserStore();
-  const {isConnected} = usePrivateWebSocketStore();
-    console.log("this ish websocket stats : ", isConnected)
-    console.table(privateUser)
+async function page() {
+  const privateUser = await CheckUserFromTokenForPrivate();
+  if (!privateUser.success || !privateUser.user || privateUser.message !== "user verified") {
+    await signOut();
+    return redirect("/")
+  }
   return (
-    <div>
-      
-    </div>
+    <PrivateWebSocketWrapper>
+      <PrivateMainAppPage />
+    </PrivateWebSocketWrapper>
   )
 }
 export default page

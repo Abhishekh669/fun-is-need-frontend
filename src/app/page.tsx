@@ -4,7 +4,6 @@ import React from 'react'
 
 async function page() {
   const user = await CheckUserFromToken();
-  console.log("this is h seru schecking : ",user)
   
   return (
       <MainApppPage  tokenStatus={!user?.success} user={user?.user}/>

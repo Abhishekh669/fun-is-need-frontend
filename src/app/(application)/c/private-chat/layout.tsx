@@ -1,7 +1,6 @@
 import PrivateChatWrapper from '@/components/elements/private-chat/PrivateChatWrapper'
-import PrivateWebSocketWrapper from '@/components/elements/private-chat/PrivateWebSocketWrapper'
 import { CheckUserFromTokenForPrivate } from '@/lib/actions/user/get/check-token-for-private'
-import { auth } from '@/lib/utils/auth/auth'
+import { auth, signOut } from '@/lib/utils/auth/auth'
 import { redirect } from 'next/navigation'
 import React from 'react'
 
@@ -10,15 +9,19 @@ async function PrivateChatLayout({ children }: { children: React.ReactNode }) {
     await auth(),
     await CheckUserFromTokenForPrivate()
   ])
-  if (!session || !session.user || !privateUser.success || !privateUser.user || privateUser.message !== "user verified") {
+
+  if (!session || !session.user) {
     return redirect("/login")
   }
+
+  if( !privateUser.success || !privateUser.user || privateUser.message !== "user verified"){
+    await signOut();
+    return redirect("/")
+  }
   return (
-    <PrivateWebSocketWrapper>
-      <PrivateChatWrapper user={privateUser.user}>
+    <PrivateChatWrapper user={privateUser.user}>
         {children}
       </PrivateChatWrapper>
-    </PrivateWebSocketWrapper>
   )
 }
 

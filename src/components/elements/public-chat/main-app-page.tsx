@@ -163,7 +163,7 @@ export default function MainAppPage({ tokenStatus, user }: { tokenStatus: boolea
 
         const timeoutId = setTimeout(() => {
             setUserName(inputValue.trim())
-        }, 1000)
+        }, 600)
 
         return () => clearTimeout(timeoutId)
     }, [inputValue])
