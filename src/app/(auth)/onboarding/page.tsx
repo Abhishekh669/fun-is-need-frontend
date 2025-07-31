@@ -6,17 +6,14 @@ import { redirect } from 'next/navigation';
 import React from 'react'
 
 async function page() {
-    const [session, result, checkUser] = await Promise.all([
+    const [session, resultclear] = await Promise.all([
         await auth(),
         await getUserInDb(),
-        await CheckUserFromToken(),
     ])
     if (!session || !session?.user) {
         return redirect("/login")
     }
-    if (checkUser.error || !checkUser.success) {
-        return redirect("/")
-    }
+   
     if (result.success && result.message === "user exists") {
         return redirect("/c/private-chat")
     }

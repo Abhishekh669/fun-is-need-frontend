@@ -3,7 +3,6 @@
 import { get_cookies } from "@/lib/utils/cookies/get-cookies"
 import { getErrorMessage } from "@/lib/utils/error/get-error"
 import { getBackEndUrl } from "@/lib/utils/helper/get-backend-url"
-import { createCookieServerAction } from "@/lib/utils/helper/set-token"
 import axios from "axios"
 
 export interface NewUserType{

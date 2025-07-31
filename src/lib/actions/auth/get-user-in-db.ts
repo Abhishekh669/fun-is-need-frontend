@@ -21,9 +21,8 @@ export const getUserInDb = async() =>{
         })
 
         const data =res.data;
-        console.log("this is teh data : ",data)
         if(!data.success){
-            throw new Error("somethign went wrong")
+            throw new Error("something went wrong")
         }
         return {
             message : "user exists",
