@@ -6,7 +6,6 @@ import { useWebSocketConnectionStore } from "@/lib/store/use-web-socket-store"
 import toast from "react-hot-toast"
 import type { UserType } from "@/lib/store/user-store"
 import type { EventType, MessageReplyType } from "@/lib/utils/types/chat/types"
-import { useChatStore } from "@/lib/store/use-chat-store"
 import { ExtendedEmojiPicker } from "./chat-message"
 import { Textarea } from "@/components/ui/textarea"
 

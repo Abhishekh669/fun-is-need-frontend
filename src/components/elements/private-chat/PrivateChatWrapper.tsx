@@ -9,7 +9,8 @@ export interface UserTypeForSession {
     userName: string,
     userEmail: string,
     isAuthenticated: boolean,
-    googleId: string
+    googleId: string,
+    allowMessagesFromNonFriends : boolean
 }
 
 
@@ -28,7 +29,8 @@ function PrivateChatWrapper({ children, user }: { children: React.ReactNode, use
                 userName: user.userName,
                 userEmail: user.userEmail,
                 isAuthenticated: user.isAuthenticated,
-                googleId: user.googleId
+                googleId: user.googleId,
+                allowToMessage : user.allowMessagesFromNonFriends
             }
             setPrivateUser(data)
         }

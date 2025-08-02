@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button"
 import ChatInterface, { ChildRef } from "./chat-interface"
 import UsernameModal from "./user-name-model"
 import { DeletePublicMessage, EventType, IsTypingPayload, NewPayloadType, NewUserPayloadType, ReactionSendPayloadType } from "@/lib/utils/types/chat/types"
+import UserListCard from "./LoggedInUserList"
+import { NotificationDropdown } from "./notification-compo"
 
 
 
@@ -61,7 +63,6 @@ export default function MainAppPage({ tokenStatus, user }: { tokenStatus: boolea
             socket.removeEventListener("message", handleMessage)
         }
     }, [socket, addMessage])
-    console.log("for private  ;", user)
 
     function routeEvent(event: EventType) {
         if (event.type === undefined) {
@@ -95,7 +96,7 @@ export default function MainAppPage({ tokenStatus, user }: { tokenStatus: boolea
                 break;
             case "new_user_join":
                 const newUserPayload = event.payload as NewUserPayloadType
-                console.log("this is  the new user apyload : ",newUserPayload)
+                console.log("this is  the new user apyload : ", newUserPayload)
                 updateTotaluser(newUserPayload.totalUser)
                 if (UserStore?.userId === newUserPayload.userId) {
                     toast.success("You have joined successfully")
@@ -198,6 +199,7 @@ export default function MainAppPage({ tokenStatus, user }: { tokenStatus: boolea
                         <span className="text-lg sm:text-2xl animate-bounce">🎪</span>
                     </h1>
                     <nav className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm font-medium">
+                        <NotificationDropdown />
                         <button className="hover:bg-white/20 px-2 sm:px-4 py-1 sm:py-2 rounded-full transition-all duration-200 transform active:scale-95">
                             Private Chat 💬
                         </button>
@@ -210,22 +212,30 @@ export default function MainAppPage({ tokenStatus, user }: { tokenStatus: boolea
                     </nav>
                 </header>
 
-                <div className="container mx-auto px-4 py-4 sm:py-8 max-w-5xl">
-                    <div className="mb-4 sm:mb-6 text-center">
-                        <h2 className="text-xl sm:text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-2">
-                            Welcome to the Fun Zone, {user?.userName || "Guest"}! 🎉
-                            Total User : {totalUser}
-                        </h2>
-                        <p className="text-sm sm:text-lg text-gray-600">
-                            Where conversations come alive! Drop a message and make some friends!
-                            <span className="inline-block animate-pulse">💫</span>
-                        </p>
-                    </div>
+                <div className=" flex relative">
+                    <div className=" mx-auto px-4 py-4 sm:py-8 max-w-5xl ">
+                        <div className="mb-4 sm:mb-6 text-center">
+                            <h2 className="text-xl sm:text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-2">
+                                Welcome to the Fun Zone, {user?.userName || "Guest"}! 🎉
+                                Total User : {totalUser}
+                            </h2>
+                            <p className="text-sm sm:text-lg text-gray-600">
+                                Where conversations come alive! Drop a message and make some friends!
+                                <span className="inline-block animate-pulse">💫</span>
+                            </p>
+                        </div>
 
-                    {/* <ChatInterface user={user} messages={messages} /> */}
-                    <ChatInterface ref={childRef} />
+                        {/* <ChatInterface user={user} messages={messages} /> */}
+                        <ChatInterface ref={childRef} />
+
+                    </div>
+                    <div className="absolute  right-30 top-36">
+                        <UserListCard />
+                    </div>
                 </div>
+
             </div>
+
         </div>
     )
 }

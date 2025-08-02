@@ -12,6 +12,7 @@ type PrivateChatStore = {
     clearMessages : () => void,
     setMessages : (msgs : PrivateMessageType[]) =>  void;
     setReactionUpdate :  (data : ReactionSendPayloadType) => void
+    
 }
 
 

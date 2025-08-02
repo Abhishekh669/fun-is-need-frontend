@@ -11,8 +11,19 @@ export type PrivateUserType = {
   userEmail : string;
   isAuthenticated  : boolean
   googleId : string
+  allowToMessage : boolean,
 }
 
+
+export type LoggedInUsersType =  {
+  id : string
+  userId : string;
+  userName : string;
+  email : string;
+  googleId : string;
+  subscription : string;
+  allowMessagesFromNonFriends : boolean
+}
 type PrivateUserStore = {
   privateUser  : PrivateUserType | undefined;
   resetPrivateUser : () => void;
@@ -21,12 +32,22 @@ type PrivateUserStore = {
 
 type UserStore = {
   user: UserType | undefined;
+  loggedInUsers : LoggedInUsersType[],
+  addLoggedInUser : (u : LoggedInUsersType) => void,
+  setLoggedInUser : (u : LoggedInUsersType[])=>void
+  clearLoggedInUsers : () => void,
   resetUser: () => void;
   setUser: (u: UserType  | undefined) => void;
 };
 
 export const useUserStore = create<UserStore>((set, get) => ({
   user: undefined,
+  loggedInUsers : [],
+  addLoggedInUser : (u) => set((state)=>(
+    {loggedInUsers : [...state.loggedInUsers, u]}
+  )),
+  setLoggedInUser : (u) => set({loggedInUsers : u}),
+  clearLoggedInUsers : ()=> set({loggedInUsers : []}),
   setUser: (u: UserType | undefined) => set({ user: u }),
   resetUser: () => set({ user: undefined }),
 }));

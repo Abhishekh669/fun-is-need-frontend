@@ -208,6 +208,7 @@ const ChatMessage = React.memo(function ChatMessage({
   const [showReactionsDialog, setShowReactionsDialog] = useState(false)
   const [showExtendedEmojiPicker, setShowExtendedEmojiPicker] = useState(false)
   const actionsRef = useRef<HTMLDivElement>(null)
+  
 
   useEffect(() => {
     const timer = setTimeout(() => setIsVisible(true), 100)
@@ -321,7 +322,7 @@ const ChatMessage = React.memo(function ChatMessage({
     >
       {/* Fun Avatar */}
       <div className="flex-shrink-0">
-        <FunAvatar name={message.userName} isCurrentUser={isCurrentUser} />
+        <FunAvatar name={message.userName}  isCurrentUser={isCurrentUser} />
       </div>
 
       {/* Message Content */}

@@ -10,7 +10,6 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 
 function PrivateMainAppPage() {
     const { privateUser } = usePrivateUserStore();
-    console.log("this ish te privaet user in teh main page : ",privateUser)
     const { socket, isConnected, connect, updateTotaluser, totalUser, reconnect } = usePrivateWebSocketStore();
     const { messages, setMessages, addMessage } = usePrivateChatStore();
 
@@ -35,7 +34,6 @@ function PrivateMainAppPage() {
         const handleMessage = (event: MessageEvent) => {
             const newEvent = JSON.parse(event.data)
             routeEvent(newEvent)
-            console.log("new event in pr8ivate chat : ", newEvent)
         }
 
         socket.onmessage = handleMessage
@@ -45,25 +43,25 @@ function PrivateMainAppPage() {
         }
     }, [socket])
 
-    const handleSendMessage = (e : React.FormEvent) =>{
+    const handleSendMessage = (e: React.FormEvent) => {
         e.preventDefault();
 
     }
 
-      const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
         setMessage(e.target.value)
         // handleIsTyping()
-      }, [ setMessage])
+    }, [setMessage])
 
-        const handleKeyPress = useCallback(
-          (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const handleKeyPress = useCallback(
+        (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
             if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault()
-              handleSendMessage(e as any)
+                e.preventDefault()
+                handleSendMessage(e as any)
             }
-          },
-          [handleSendMessage],
-        )
+        },
+        [handleSendMessage],
+    )
 
     function routeEvent(event: PrivateEventTpye) {
         if (event.type == undefined || !event.type) {
@@ -86,6 +84,7 @@ function PrivateMainAppPage() {
 
 
             <div className="flex gap-2 sm:gap-3 items-end">
+                
                 <div className="flex-1 relative">
                     <div className="relative">
                         <Textarea

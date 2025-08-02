@@ -5,13 +5,21 @@ export type EventType = {
 }
 
 export type PrivateEventTpye = {
-    type : "private_send_message",
-    payload : PrivateMessagePayload
+    type : "private_send_message" | "add_friend",
+    payload : PrivateMessagePayload | FriendPayload
 }
 
 
 export type IsTypingPayload = {
         isTyping : boolean
+}
+
+export type addReqeustResponse = {
+    friendId : string,
+    friendName : string,
+    userId : string,
+    userName : string,
+    alreadyExists : boolean
 }
 
 export type ReactionSendPayloadType = {
@@ -105,3 +113,16 @@ export type NewUserPayloadType = {
     userId: string,
     userName: string
 }
+
+
+  export interface CoonversationPayload{
+    members : string[],
+    isGroup : boolean,
+    
+  }
+
+
+  export interface FriendPayload {
+    userId : string,
+    friendId : string,
+  }
